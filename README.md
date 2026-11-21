@@ -1,17 +1,10 @@
 # career-crew
 
-**CV'nize olmayan bir şey eklemeyen çok ajanlı iş başvurusu asistanı.**
+İlana göre CV uyarlayan, ama CV'de olmayan hiçbir şeyi eklemeyen bir iş başvurusu asistanı.
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Lisans](https://img.shields.io/badge/lisans-MIT-green) ![Durum](https://img.shields.io/badge/durum-M1-orange)
 
-Bir iş ilanı ve CV'nizi verirsiniz. Altı yapay zekâ ajanı kendi aralarında konuşarak şunları hazırlar:
-
-- 📄 **İlana göre uyarlanmış CV**
-- 💌 **Ön yazı**
-- 🎤 **İlana ve CV'ye özel mülakat hazırlığı**
-- 📊 **Rapor:** işveren puanı, ATS skoru (önce/sonra), yapılan değişiklikler, açık eksikler
-
-Ajanların konuşması terminalde canlı akar. Kim neyi neden değiştirdi, görürsünüz.
+Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı ajan sırayla çalışıp ilana göre düzenlenmiş bir CV, ön yazı, mülakat hazırlığı ve bir rapor çıkarıyor. Raporda işveren puanı, ATS skorunun önceki ve sonraki hâli, CV'de nelerin değiştiği ve kapanmayan eksikler var. Ajanların birbirine yazdıkları terminalde canlı akıyor, hangi maddenin neden değiştiğini oradan takip edebiliyorsunuz.
 
 ## İçindekiler
 
@@ -27,36 +20,36 @@ Ajanların konuşması terminalde canlı akar. Kim neyi neden değiştirdi, gör
 
 ## Neden farklı?
 
-Yapay zekâyla CV uyarlamanın bilinen sorunu uydurmadır. Model, ilana uysun diye adayda olmayan beceriyi, rakamı ya da kıdemi ekler. Araştırmalar bunun en çok deneyim bölümünde olduğunu gösteriyor ([Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457)). Uydurma mülakatta ortaya çıkar ve adaya zarar verir.
+Yapay zekâya CV uyarlattığınızda ilana uysun diye adayda olmayan beceri, rakam ya da kıdem ekleyebiliyor. Bu en çok deneyim bölümünde oluyor ([Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457)). Mülakatta sorulduğunda da ortaya çıkıyor.
 
-career-crew bu sorunu modelin iyi niyetine bırakmaz:
+Promptta "uydurma yapma" demek bunu engellemiyor. career-crew'da her CV maddesi orijinal CV'den birebir bir alıntıya bağlanıyor ve bu bağlantıyı model değil kod kontrol ediyor:
 
 | | Yaygın yaklaşım | career-crew |
 |---|---|---|
-| **Uydurmaya karşı** | Prompta "uydurma yapma" yazılır, modele güvenilir | Her madde orijinal CV'den birebir bir alıntıya bağlanır. Alıntıyı ve 8 ayrı kuralı **kod** kontrol eder |
-| **Son karar** | Ajanlar birbirini onaylar | Kod hata bulduysa Doğrulayıcı ajan onay **veremez**. Onay verirse kod kararı "ret" yapar |
-| **Eksik beceriler** | Eksik anahtar kelimeyi CV'ye eklemek önerilir | Eksikler eklenmez. Raporda "gerçek eksik" diye yazılır, mülakat hazırlığında dürüst cevap önerilir |
-| **ATS skoru** | Tek bir sayı | Önce/sonra skoru ve hangi kelimenin neden eklenmediği |
-| **Şeffaflık** | Sadece sonuç dosyası | Ajanların konuşması canlı akar, her tur `work/` klasöründe saklanır, tüm süreç `events.jsonl` dosyasına yazılır |
-| **Gereksiz tur** | Sabit sayıda yeniden yazma | Hedefe ulaşınca ya da puan artmayınca döngü durur |
-| **Veri** | CV bir bulut hizmetine yüklenir | Her şey kendi bilgisayarınızda çalışır. Veri yalnızca seçtiğiniz model sağlayıcısına gider, analitik yok |
-| **Maliyet** | Aylık ücretli hizmet | `mock` modu ücretsiz. `claude-code` modu mevcut Claude aboneliğinizi kullanır |
+| Uydurmaya karşı | Prompta "uydurma yapma" yazılır, modele güvenilir | Her madde orijinal CV'den bir alıntıya bağlanır. Alıntıyı ve 8 ayrı kuralı kod kontrol eder |
+| Son karar | Ajanlar birbirini onaylar | Kod hata bulduysa Doğrulayıcı onay veremez. Verirse kod kararı "ret" olarak değiştirir |
+| Eksik beceriler | Eksik anahtar kelimeyi CV'ye eklemek önerilir | Eksik kelime eklenmez. Raporda gerçek eksik olarak yazılır, mülakat hazırlığında nasıl dürüstçe cevaplanacağı anlatılır |
+| ATS skoru | Tek bir sayı | Önceki ve sonraki skor, eksik kelimeler ve neden eklenmedikleri |
+| Şeffaflık | Sadece sonuç dosyası | Konuşma canlı akar, her turun CV'si `work/` klasöründe kalır, süreç `events.jsonl` dosyasına yazılır |
+| Tur sayısı | Sabit sayıda yeniden yazma | Hedefe ulaşınca ya da puan artmayı bırakınca döngü durur |
+| Veri | CV bir bulut hizmetine yüklenir | Program kendi bilgisayarınızda çalışır. Veri sadece seçtiğiniz model sağlayıcısına gider, analitik yok |
+| Maliyet | Aylık ücretli hizmet | `mock` modu ücretsiz, `claude-code` modu mevcut Claude aboneliğinizle çalışır |
 
-Bir gerçek çalıştırmadan: ilan Docker istiyordu, CV'de Docker yoktu. CV Yazarı Docker'ı eklemedi. İşe Alım Müdürü bu yüzden 62 puan verdi ve döngü puanı yükseltmek için uydurmaya başvurmadı. Ön yazı Docker deneyimi olmadığını açıkça söyledi, mülakat hazırlığı bu soru için dürüst bir cevap önerdi.
+Gerçek bir çalıştırmada ilan Docker istiyordu ve CV'de Docker yoktu. CV Yazarı Docker'ı eklemedi, İşe Alım Müdürü de bu yüzden 62 puan verdi. Ön yazıda Docker deneyimi olmadığı açıkça yazıyordu, mülakat hazırlığında da "Docker kullandınız mı?" sorusu için dürüst bir cevap önerisi vardı.
 
 ## Hızlı başlangıç
 
-Python 3.11 ya da üstü gerekir.
+Python 3.11 ya da üstü gerekiyor.
 
 ```bash
-git clone https://github.com/<kullanici>/career-crew.git
+git clone https://github.com/burakaydins/career-crew.git
 cd career-crew
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[api,dev]"
 ```
 
-Hesap gerektirmeyen demo (sahte CV ve ilan ile):
+Hesap gerektirmeyen demo, sahte bir CV ve ilanla:
 
 ```bash
 career-crew --ilan examples/ilan.md --cv examples/cv.md
@@ -79,7 +72,7 @@ career-crew --ilan ilan.md --cv cv.md --mod api
 
 ## Örnek çalıştırma
 
-`mock` modunda CV Yazarı ilk turda bilerek uydurma ekler. Kontrollerin nasıl çalıştığını gösterir:
+`mock` modunda CV Yazarı ilk turda bilerek uydurma ekliyor, kontrollerin bunları nasıl yakaladığı görülsün diye:
 
 ```
 ───────────────────────────────── CV turu 1/3 ──────────────────────────────────
@@ -105,7 +98,7 @@ sonuç yok.
 ✓ CV 2. turda hedefe ulaştı.
 ```
 
-Her çalıştırma `runs/` altında kendi klasörünü açar:
+Her çalıştırma `runs/` altında kendi klasörünü açıyor:
 
 ```
 runs/2026-11-21_143000_ilan/
@@ -128,7 +121,7 @@ runs/2026-11-21_143000_ilan/
 | 💌 Mektup Yazarı | Ön yazı hazırlar | Sonnet |
 | 🎤 Mülakatçı | Mülakat soruları ve cevap ipuçları hazırlar | Haiku |
 
-Modeller `agents/*.json` dosyalarından değiştirilebilir. Promptlar `prompts/tr/` altındadır. Ajanlar kısa konuşur: en fazla 3 cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
+Modeller `agents/*.json` dosyalarından, promptlar `prompts/tr/` altından değiştirilebiliyor. Ajanlara kısa konuşmaları söylendi: en fazla üç cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
 
 ### Akış
 
@@ -140,17 +133,11 @@ Modeller `agents/*.json` dosyalarından değiştirilebilir. Promptlar `prompts/t
                                   └─ Doğrulayıcı + İşe Alım Müdürü (paralel)
 ```
 
-Döngü üç durumda biter:
+Uydurma yoksa ve puan 80'e ulaştıysa döngü biter. Üst üste iki temiz turda puan yükselmediyse de durur, çünkü kalan eksikler orijinal CV'de yok ve yeni bir tur sadece token harcar. Üç tur dolarsa en iyi sürüm kullanılır, rapora da bir uyarı eklenir.
 
-1. **Hedefe ulaşıldı:** uydurma yok ve puan 80 ya da üstü.
-2. **Puan artmıyor:** üst üste iki temiz turda puan yükselmedi. Kalan eksikler orijinal CV'de olmadığı için yeni tur yalnızca token harcar.
-3. **3 tur doldu:** en iyi sürüm kullanılır ve rapora uyarı eklenir.
+### Uydurma kontrolü
 
-### Uydurmaya karşı üç katman
-
-1. **Kanıt alıntısı (kod):** CV Yazarı her maddeyi orijinal CV'den en az 3 kelimelik birebir bir alıntıya bağlar. Kod, alıntının orijinal CV'de gerçekten geçtiğini ve CV'deki her maddenin bir alıntıya bağlı olduğunu kontrol eder.
-2. **Deterministik kontroller (kod):** aşağıdaki tablodaki kurallar. LLM kullanılmaz, aynı girdi her zaman aynı sonucu verir.
-3. **Doğrulayıcı ajan (LLM):** kodun yakalayamadığı anlam büyütmelerini yakalar ("yer aldım" → "yönettim"). Kod hatası varken onay veremez.
+Kontrol üç aşamada yapılıyor. Önce CV Yazarı her maddeyi orijinal CV'den en az üç kelimelik birebir bir alıntıya bağlıyor. Kod, alıntının orijinal CV'de gerçekten geçtiğine ve CV'deki her maddenin bir alıntısı olduğuna bakıyor. Sonra aşağıdaki kurallar çalışıyor. Bunlar düz Python fonksiyonları, LLM kullanmıyorlar ve aynı girdiye hep aynı sonucu veriyorlar. En son Doğrulayıcı ajan, kodun yakalayamayacağı anlam kaymalarına bakıyor; "projede yer aldım" cümlesinin "projeyi yönettim" olması gibi. Kod hata bulduysa Doğrulayıcı onay veremiyor.
 
 | Kontrol | Düzey | Ne yakalar |
 |---|---|---|
@@ -201,14 +188,11 @@ flowchart TB
     BUS --> LOG
 ```
 
-**Temel kararlar:**
+Ajanlara hiç araç vermedim. İlan, CV ve önceki sürüm doğrudan prompta ekleniyor, her ajan da `{"message", "data", "files"}` biçiminde tek bir JSON döndürüyor. Dosyaları ajanlar değil orchestrator yazıyor ve her skill sadece kendi dosya adlarını yazabiliyor. Bu sayede üç mod aynı şekilde çalışıyor ve `claude-code` modunda bile ajanların dosya ya da shell erişimi olmuyor.
 
-- **Ajanlar araç kullanmaz.** İlan, CV ve önceki sürüm prompta doğrudan eklenir. Her ajan tek bir JSON zarfı döndürür: `{"message", "data", "files"}`. Dosyaları ajan değil orchestrator yazar ve her skill yalnızca kendi dosya adlarını yazabilir. Bu yüzden üç mod aynı biçimde çalışır, `claude-code` modunda da ajanların dosya ya da shell erişimi yoktur.
-- **Workflow alana bağımlı değildir.** `Sequential`, `Parallel`, `Loop` ve `UserGate` yalnızca bir bağlam nesnesiyle konuşur. Kariyer akışı bu parçalarla [orchestrator.py](app/orchestrator.py) içinde kurulur.
-- **Kontroller LLM kullanmaz.** `app/checks/` içindeki her modül saf bir Python fonksiyonudur.
-- **Her şey olay olarak akar.** Terminal çıktısı ve `events.jsonl` aynı Event Bus'tan beslenir. M2'deki web arayüzü aynı olayları SSE ile alacak.
+Workflow parçaları (`Sequential`, `Parallel`, `Loop`, `UserGate`) iş akışının ne olduğunu bilmiyor, sadece bir bağlam nesnesiyle konuşuyor. Kariyer akışı bu parçalarla [orchestrator.py](app/orchestrator.py) içinde kuruluyor. Terminal çıktısı ve `events.jsonl` aynı Event Bus'tan besleniyor. M2'deki web arayüzü de aynı olayları SSE ile alacak.
 
-**Görev durumları** (A2A'dan uyarlandı): `submitted → working → completed / rejected / failed / input-required`.
+Görev durumlarını A2A'dan aldım: `submitted → working → completed / rejected / failed / input-required`.
 
 | Yol | Görev |
 |---|---|
@@ -229,20 +213,19 @@ flowchart TB
 
 | Mod | Kim için | Maliyet |
 |---|---|---|
-| `api` | **Önerilen yol.** Kendi Anthropic API anahtarınızla | Kendi API kullanımınız |
+| `api` | Başkalarının kullanması için önerdiğim yol, kendi Anthropic API anahtarınızla | Kendi API kullanımınız |
 | `claude-code` | Kendi Claude Pro/Max aboneliğinizle kişisel kullanım | Ek ücret yok, abonelik limitine tabi |
 | `mock` | Demo ve geliştirme | Ücretsiz |
 
-**`api` modu:** `ANTHROPIC_API_KEY` ortam değişkenini ayarlayın ya da `.env.example` dosyasını `.env` olarak kopyalayıp anahtarı yazın. Anahtar koda ya da loglara yazılmaz.
+`api` modu için `ANTHROPIC_API_KEY` ortam değişkenini ayarlayın ya da `.env.example` dosyasını `.env` adıyla kopyalayıp anahtarı içine yazın. Anahtar koda ya da loglara yazılmıyor.
 
-**`claude-code` modu:** Claude Code kurulu ve giriş yapılmış olmalı (`claude auth login`). Ajanlar global ayarlarınız, eklentileriniz, hook'larınız ve MCP sunucularınız olmadan çalışır, hiçbir araca erişimleri yoktur. Ortamda `ANTHROPIC_API_KEY` varsa bu mod onu kaldırır, böylece ücret API'ye değil aboneliğe yansır. Bir çalıştırma yaklaşık 2 dakika sürer.
+`claude-code` modu için Claude Code kurulu olmalı ve `claude auth login` ile giriş yapılmış olmalı. Ajanlar sizin global ayarlarınızı, eklentilerinizi, hook'larınızı ve MCP sunucularınızı yüklemeden çalışıyor, hiçbir araca da erişemiyor. Ortamda `ANTHROPIC_API_KEY` tanımlıysa bu mod onu kaldırıyor, böylece ücret API'ye değil aboneliğe yansıyor. Benim denememde bir çalıştırma iki dakika kadar sürdü.
 
-> **Kullanım şartları:** `claude-code` modu, herkesin **kendi** aboneliğiyle **kendi** bilgisayarında kişisel kullanımı içindir. Proje bir hizmet olarak sunulmaz. Claude Code giriş bilgileri asla okunmaz ya da başka bir yere taşınmaz, yalnızca resmî `claude` komutu çağrılır. Bu modu kullananlar Anthropic kullanım şartlarına kendileri uymakla yükümlüdür.
+> Kullanım şartları: `claude-code` modu herkesin kendi aboneliğiyle, kendi bilgisayarında kişisel kullanımı için var. Proje bir hizmet olarak sunulmuyor. Claude Code giriş bilgileri okunmuyor ya da başka bir yere taşınmıyor, sadece resmî `claude` komutu çağrılıyor. Bu modu kullananlar Anthropic kullanım şartlarına uymaktan kendileri sorumlu.
 
 ## Gizlilik
 
-- `runs/`, `memory/` ve `.env` `.gitignore`'dadır. Repoda yalnızca **sahte** örnek CV ve ilan vardır.
-- Veriler, seçilen model sağlayıcısı dışında hiçbir yere gönderilmez. Analitik ya da izleme yoktur.
+`runs/`, `memory/` ve `.env` `.gitignore`'da. Repodaki örnek CV ve ilan sahte. Veriler seçilen model sağlayıcısı dışında bir yere gönderilmiyor, analitik ya da izleme yok.
 
 ## Geliştirme
 
@@ -250,35 +233,35 @@ flowchart TB
 pytest
 ```
 
-Gerçek model çağıran testler (`claude-code` girişi gerekir):
+Gerçek model çağıran testler için `claude-code` girişi gerekiyor:
 
 ```bash
 CAREER_CREW_LIVE=1 pytest -m live
 ```
 
-Canlı testler, ajan çağrısının kullanıcı eklentilerini ve MCP sunucularını yüklemediğini ve hiçbir araca erişmediğini doğrular.
+Bu testler ajan çağrısının kullanıcı eklentilerini ve MCP sunucularını yüklemediğine ve hiçbir araca erişmediğine bakıyor.
 
-Tasarım dokümanı: [KARIYER-EKIBI.md](KARIYER-EKIBI.md)
+Tasarım notları [KARIYER-EKIBI.md](KARIYER-EKIBI.md) dosyasında.
 
 ## Yol haritası
 
-- [x] **M1:** çekirdek, terminal arayüzü, uydurma kontrolleri
-- [ ] **M2:** localhost web arayüzü, PDF/fotoğraf girdisi, İngilizce promptlar
-- [ ] **M3:** hafıza, duraklat/devam et, PDF çıktı
-- [ ] **M4:** replay modu, demo GIF'i
+- [x] M1: çekirdek, terminal arayüzü, uydurma kontrolleri
+- [ ] M2: localhost web arayüzü, PDF ve fotoğraf girdisi, İngilizce promptlar
+- [ ] M3: hafıza, duraklatıp devam etme, PDF çıktı
+- [ ] M4: replay modu, demo GIF'i
 
 ## Esinlenmeler
 
-| Kaynak | Ne alındı |
+| Kaynak | Ne aldım |
 |---|---|
-| [DeepLearning.AI: Multi AI Agent Systems with crewAI](https://learn.deeplearning.ai/courses/multi-ai-agent-systems-with-crewai/lesson/a8ecj/build-a-crew-to-tailor-job-applications) | İş başvurusu ekibi rolleri |
-| [Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457) | Uydurmanın deneyim bölümünde yoğunlaşması, tarih kontrolü, deterministik sızıntı tespiti |
-| [Hirepanel](https://github.com/punit2911/Hirepanel) | "Her iddia doğrulanmış bir alıntıya dayanmalı" ilkesi |
-| Yusuf Baykaloğlu, *Çoklu-Ajan Sistemleri: A2A Protokolü ile AI Agent Orkestrasyonu* | Agent Card, Task durumları, Message/Part, workflow desenleri, Event Bus |
+| [DeepLearning.AI: Multi AI Agent Systems with crewAI](https://learn.deeplearning.ai/courses/multi-ai-agent-systems-with-crewai/lesson/a8ecj/build-a-crew-to-tailor-job-applications) | İş başvurusu ekibindeki roller |
+| [Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457) | Uydurmanın deneyim bölümünde yoğunlaştığı bulgusu, tarih kontrolü, kodla sızıntı tespiti |
+| [Hirepanel](https://github.com/punit2911/Hirepanel) | Her iddianın doğrulanmış bir alıntıya dayanması fikri |
+| Yusuf Baykaloğlu, *Çoklu-Ajan Sistemleri: A2A Protokolü ile AI Agent Orkestrasyonu* | Agent Card, görev durumları, Message/Part yapısı, workflow desenleri, Event Bus |
 
 ## Uyarı
 
-Yapay zekâ çıktıları hatalı olabilir. Başvurmadan önce her şeyi kendiniz kontrol edin.
+Yapay zekâ çıktıları hatalı olabilir. Başvurmadan önce her şeyi kendiniz okuyun.
 
 ## Lisans
 
