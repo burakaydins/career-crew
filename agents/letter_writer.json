@@ -1,0 +1,13 @@
+{
+  "name": "letter_writer",
+  "displayName": "💌 Mektup Yazarı",
+  "description": "Uyarlanmış CV ve ilana göre ön yazı hazırlar",
+  "skills": [
+    "write_letter"
+  ],
+  "model": "sonnet",
+  "effort": "medium",
+  "allowedTools": [],
+  "color": "#F31260",
+  "promptFile": "prompts/tr/letter_writer.md"
+}

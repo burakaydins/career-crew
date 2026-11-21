@@ -1,0 +1,13 @@
+{
+  "name": "interviewer",
+  "displayName": "🎤 Mülakatçı",
+  "description": "İlana ve CV'ye özel mülakat soruları ve cevap ipuçları hazırlar",
+  "skills": [
+    "prepare_interview"
+  ],
+  "model": "haiku",
+  "effort": "low",
+  "allowedTools": [],
+  "color": "#06B6D4",
+  "promptFile": "prompts/tr/interviewer.md"
+}

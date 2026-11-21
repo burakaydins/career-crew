@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "career-crew"
+version = "0.1.0"
+description = "Multi-agent job application assistant: tailored CV, cover letter and interview prep with anti-fabrication checks."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Burak Aydın" }]
+dependencies = ["rich>=13"]
+
+[project.optional-dependencies]
+api = ["anthropic>=0.70"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+career-crew = "app.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: calls a real model (set CAREER_CREW_LIVE=1)"]

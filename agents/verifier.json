@@ -1,0 +1,13 @@
+{
+  "name": "verifier",
+  "displayName": "🛡️ Doğrulayıcı",
+  "description": "Kod kontrollerini yorumlar, anlam değiştiren abartıları yakalar",
+  "skills": [
+    "verify"
+  ],
+  "model": "sonnet",
+  "effort": "medium",
+  "allowedTools": [],
+  "color": "#17C964",
+  "promptFile": "prompts/tr/verifier.md"
+}

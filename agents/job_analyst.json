@@ -1,0 +1,13 @@
+{
+  "name": "job_analyst",
+  "displayName": "🔎 İlan Analisti",
+  "description": "İlandan pozisyon, şirket, beceriler, anahtar kelimeler ve seviyeyi çıkarır",
+  "skills": [
+    "analyze_job"
+  ],
+  "model": "sonnet",
+  "effort": "low",
+  "allowedTools": [],
+  "color": "#F5A524",
+  "promptFile": "prompts/tr/job_analyst.md"
+}

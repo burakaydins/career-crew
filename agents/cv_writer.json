@@ -1,0 +1,13 @@
+{
+  "name": "cv_writer",
+  "displayName": "✍️ CV Yazarı",
+  "description": "CV'yi ilana göre uyarlar, her maddeyi kanıta bağlar",
+  "skills": [
+    "tailor_cv"
+  ],
+  "model": "sonnet",
+  "effort": "medium",
+  "allowedTools": [],
+  "color": "#4F8EF7",
+  "promptFile": "prompts/tr/cv_writer.md"
+}

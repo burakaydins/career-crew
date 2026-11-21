@@ -1,0 +1,13 @@
+{
+  "name": "recruiter",
+  "displayName": "👔 İşe Alım Müdürü",
+  "description": "İşveren gözüyle 0-100 puan verir, en kritik 3 eksiği söyler",
+  "skills": [
+    "score"
+  ],
+  "model": "haiku",
+  "effort": "low",
+  "allowedTools": [],
+  "color": "#A855F7",
+  "promptFile": "prompts/tr/recruiter.md"
+}
