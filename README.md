@@ -2,7 +2,9 @@
 
 İlana göre CV uyarlayan, ama CV'de olmayan hiçbir şeyi eklemeyen bir iş başvurusu asistanı.
 
-![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Lisans](https://img.shields.io/badge/lisans-MIT-green) ![Durum](https://img.shields.io/badge/durum-M1-orange)
+[![tests](https://github.com/burakaydins/career-crew/actions/workflows/tests.yml/badge.svg)](https://github.com/burakaydins/career-crew/actions/workflows/tests.yml) ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Lisans](https://img.shields.io/badge/lisans-MIT-green)
+
+![career-crew demo: ilk turda eklenen uydurmalar kod kontrolünde yakalanıyor, ikinci turda CV düzeltiliyor](docs/demo.gif)
 
 Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı ajan sırayla çalışıp ilana göre düzenlenmiş bir CV, ön yazı, mülakat hazırlığı ve bir rapor çıkarıyor. Raporda işveren puanı, ATS skorunun önceki ve sonraki hâli, CV'de nelerin değiştiği ve kapanmayan eksikler var. Ajanların birbirine yazdıkları terminalde canlı akıyor, hangi maddenin neden değiştiğini oradan takip edebiliyorsunuz.
 
@@ -20,7 +22,7 @@ Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı aja
 
 ## Neden farklı?
 
-Yapay zekâya CV uyarlattığınızda ilana uysun diye adayda olmayan beceri, rakam ya da kıdem ekleyebiliyor. Bu en çok deneyim bölümünde oluyor ([Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457)). Mülakatta sorulduğunda da ortaya çıkıyor.
+Yapay zekâya CV uyarlattığınızda ilana uysun diye adayda olmayan beceri, rakam ya da kıdem ekleyebiliyor ([Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457) bu tür hataları sınıflandırıyor). Mülakatta sorulduğunda da ortaya çıkıyor.
 
 Promptta "uydurma yapma" demek bunu engellemiyor. career-crew'da her CV maddesi orijinal CV'den birebir bir alıntıya bağlanıyor ve bu bağlantıyı model değil kod kontrol ediyor:
 
@@ -58,13 +60,15 @@ career-crew --ilan examples/ilan.md --cv examples/cv.md
 Kendi dosyalarınızla:
 
 ```bash
-career-crew --ilan ilan.md --cv cv.md --mod api
+career-crew --ilan ilan.pdf --cv cv.docx --mod api
 ```
+
+CV ve ilan `.md`, `.txt`, `.pdf` ya da `.docx` olabilir. PDF ve DOCX'ten çıkarılan metin, ajanların ve kontrollerin tam olarak neyi gördüğü bilinsin diye çalıştırma klasöründe `inputs/cv_metin.md` olarak saklanıyor. Taranmış (resim olarak kaydedilmiş) PDF'ler şimdilik okunamıyor.
 
 | Seçenek | Açıklama |
 |---|---|
-| `--ilan` | İş ilanı (`.md` ya da `.txt`) |
-| `--cv` | CV (`.md` ya da `.txt`) |
+| `--ilan` | İş ilanı (`.md`, `.txt`, `.pdf`, `.docx`) |
+| `--cv` | CV (`.md`, `.txt`, `.pdf`, `.docx`) |
 | `--mod` | `mock` (varsayılan), `claude-code` ya da `api` |
 | `--runs` | Çalıştırma klasörlerinin yeri (varsayılan `runs/`) |
 | `--evet` | İlan okuma onayını sorma |
@@ -241,22 +245,29 @@ CAREER_CREW_LIVE=1 pytest -m live
 
 Bu testler ajan çağrısının kullanıcı eklentilerini ve MCP sunucularını yüklemediğine ve hiçbir araca erişmediğine bakıyor.
 
+README'deki GIF `mock` çalıştırmasından üretiliyor (macOS, Pillow gerekir):
+
+```bash
+python scripts/make_demo_gif.py docs/demo.gif
+```
+
 Tasarım notları [KARIYER-EKIBI.md](KARIYER-EKIBI.md) dosyasında.
 
 ## Yol haritası
 
 - [x] M1: çekirdek, terminal arayüzü, uydurma kontrolleri
-- [ ] M2: localhost web arayüzü, PDF ve fotoğraf girdisi, İngilizce promptlar
+- [x] PDF ve DOCX girdisi
+- [ ] M2: localhost web arayüzü, fotoğraf ve taranmış PDF girdisi, İngilizce promptlar
 - [ ] M3: hafıza, duraklatıp devam etme, PDF çıktı
-- [ ] M4: replay modu, demo GIF'i
+- [ ] M4: replay modu
 
 ## Esinlenmeler
 
 | Kaynak | Ne aldım |
 |---|---|
 | [DeepLearning.AI: Multi AI Agent Systems with crewAI](https://learn.deeplearning.ai/courses/multi-ai-agent-systems-with-crewai/lesson/a8ecj/build-a-crew-to-tailor-job-applications) | İş başvurusu ekibindeki roller |
-| [Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457) | Uydurmanın deneyim bölümünde yoğunlaştığı bulgusu, tarih kontrolü, kodla sızıntı tespiti |
-| [Hirepanel](https://github.com/punit2911/Hirepanel) | Her iddianın doğrulanmış bir alıntıya dayanması fikri |
+| [Grounded Optimization, arXiv 2607.01457](https://arxiv.org/abs/2607.01457) (Indukuri ve Agrawal) | Katmanlı doğrulama fikri: tarih kontrolü, kodla sızıntı tespiti, yapı kontrolü ve değerlendirici ajan |
+| [Hirepanel](https://github.com/punit2911/Hirepanel) | CV tarayan bu araçtaki "alıntı yoksa puan da yok" kuralı. Burada aynı kuralı CV'yi yazan tarafa uyguladım |
 | Yusuf Baykaloğlu, *Çoklu-Ajan Sistemleri: A2A Protokolü ile AI Agent Orkestrasyonu* | Agent Card, görev durumları, Message/Part yapısı, workflow desenleri, Event Bus |
 
 ## Uyarı

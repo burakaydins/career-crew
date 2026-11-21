@@ -11,6 +11,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from app.events import Event, EventBus
+from app.inputs import InputError, read_document
 from app.orchestrator import Orchestrator, RunFailed, create_run_dir
 from app.providers.base import ProviderError
 from app.registry import Registry
@@ -109,8 +110,8 @@ def make_ask(auto_yes: bool):
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="career-crew", description="Çok ajanlı iş başvurusu asistanı.")
-    p.add_argument("--ilan", required=True, type=Path, help="İş ilanı (.md ya da .txt)")
-    p.add_argument("--cv", required=True, type=Path, help="CV (.md ya da .txt)")
+    p.add_argument("--ilan", required=True, type=Path, help="İş ilanı (.md, .txt, .pdf, .docx)")
+    p.add_argument("--cv", required=True, type=Path, help="CV (.md, .txt, .pdf, .docx)")
     p.add_argument("--mod", default="mock", choices=["mock", "claude-code", "api"], help="Model sağlayıcısı (varsayılan: mock)")
     p.add_argument("--runs", default=Path("runs"), type=Path, help="Çalıştırma klasörlerinin yeri (varsayılan: runs/)")
     p.add_argument("--evet", action="store_true", help="İlan okuma onayını sorma")
@@ -120,12 +121,15 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    for f in (args.ilan, args.cv):
+    texts = {}
+    for name, f in (("ilan", args.ilan), ("cv", args.cv)):
         if not f.is_file():
             console.print(f"[red]Dosya bulunamadı: {f}[/]")
             return 2
-        if f.suffix.lower() not in (".md", ".txt"):
-            console.print(f"[red]Şimdilik yalnızca .md ve .txt destekleniyor: {f}[/]")
+        try:
+            texts[name] = read_document(f)
+        except InputError as e:
+            console.print(f"[red]{e}[/]")
             return 2
 
     try:
@@ -138,11 +142,15 @@ def main(argv: list[str] | None = None) -> int:
     bus = EventBus()
     bus.subscribe(Renderer(registry))
     run_dir = create_run_dir(args.runs, args.ilan, args.cv)
+    # Keep the extracted text next to the originals: it is what the agents and checks saw.
+    for name, f in (("ilan", args.ilan), ("cv", args.cv)):
+        if f.suffix.lower() in (".pdf", ".docx"):
+            (run_dir / "inputs" / f"{name}_metin.md").write_text(texts[name], encoding="utf-8")
     orch = Orchestrator(
         provider=provider,
         run_dir=run_dir,
-        job_text=args.ilan.read_text(encoding="utf-8"),
-        cv_text=args.cv.read_text(encoding="utf-8"),
+        job_text=texts["ilan"],
+        cv_text=texts["cv"],
         ask=make_ask(args.evet),
         bus=bus,
         registry=registry,

@@ -1,5 +1,4 @@
 import threading
-import time
 from types import SimpleNamespace
 
 from app.events import EventBus
@@ -29,16 +28,15 @@ def test_sequential_order():
 
 
 def test_parallel_runs_concurrently():
+    # Both steps must be inside `meet` at the same time; run one after the other,
+    # the barrier times out and the test fails. No wall-clock assumptions.
     ctx = Ctx()
-    started = []
+    barrier = threading.Barrier(2, timeout=5)
 
-    def slow(c):
-        started.append(time.monotonic())
-        time.sleep(0.2)
+    def meet(c):
+        barrier.wait()
 
-    t0 = time.monotonic()
-    Parallel(CodeStep("a", slow), CodeStep("b", slow)).run(ctx)
-    assert time.monotonic() - t0 < 0.35
+    Parallel(CodeStep("a", meet), CodeStep("b", meet)).run(ctx)
 
 
 def test_loop_stops_when_condition_met():
