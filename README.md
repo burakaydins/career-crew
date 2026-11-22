@@ -6,6 +6,10 @@
 
 ![career-crew demo: ilk turda eklenen uydurmalar kod kontrolünde yakalanıyor, ikinci turda CV düzeltiliyor](docs/demo.gif)
 
+Aynı çalıştırma web arayüzünde:
+
+![career-crew web arayüzü: solda adımlar, ortada ajanların konuşması, sağda skorlar ve CV karşılaştırması](docs/web-demo.gif)
+
 Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı ajan sırayla çalışıp ilana göre düzenlenmiş bir CV, ön yazı, mülakat hazırlığı ve bir rapor çıkarıyor. Raporda işveren puanı, ATS skorunun önceki ve sonraki hâli, CV'de nelerin değiştiği ve kapanmayan eksikler var. Ajanların birbirine yazdıkları terminalde ya da yerel bir web sayfasında canlı akıyor, hangi maddenin neden değiştiğini oradan takip edebiliyorsunuz.
 
 ## İçindekiler
@@ -13,6 +17,8 @@ Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı aja
 - [Neden farklı?](#neden-farklı)
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Web arayüzü](#web-arayüzü)
+- [Replay](#replay)
+- [Deneme mülakatı](#deneme-mülakatı)
 - [Hafıza](#hafıza)
 - [Duraklatma ve devam etme](#duraklatma-ve-devam-etme)
 - [PDF çıktı](#pdf-çıktı)
@@ -77,6 +83,8 @@ Tarayıcıda kullanmak isterseniz:
 career-crew web
 ```
 
+Bitmiş bir çalıştırmayı yeniden oynatmak ya da CV'nize göre deneme mülakatı yapmak için [Replay](#replay) ve [Deneme mülakatı](#deneme-mülakatı) bölümlerine bakın.
+
 | Seçenek | Açıklama |
 |---|---|
 | `--ilan` | İş ilanı (`.md`, `.txt`, `.pdf`, `.docx`, `.png`, `.jpg`) |
@@ -96,9 +104,9 @@ career-crew web
 career-crew web
 ```
 
-Komut `http://127.0.0.1:8765` adresinde bir sayfa açıyor ve tarayıcıyı da açıyor. Üç sütunu var. Solda süreç adımları ve durumları, ortada ajanların canlı konuşması, sağda skorlar, çıktı dosyaları ve orijinal CV ile uyarlanmış CV'nin karşılaştırması (eklenen satırlar yeşil, çıkarılanlar kırmızı, "Büyüt" ile iki CV yan yana açılıyor). İlan okuma onayı terminaldeki soru yerine konuşmanın içinde bir düğme olarak çıkıyor: onaylayabilir ya da ne düzeltileceğini yazabilirsiniz. Açık ve koyu tema var, telefon genişliğinde sütunlar alt alta diziliyor.
+Komut `http://127.0.0.1:8765` adresinde bir sayfa açıyor ve tarayıcıyı da açıyor. Üç sütunu var (yukarıdaki GIF, `docs/web.png` dosyasında da son hâli var). Solda süreç adımları ve durumları, ortada ajanların canlı konuşması, sağda skorlar, çıktı dosyaları ve orijinal CV ile uyarlanmış CV'nin karşılaştırması (eklenen satırlar yeşil, çıkarılanlar kırmızı, "Büyüt" ile iki CV yan yana açılıyor). İlan okuma onayı terminaldeki soru yerine konuşmanın içinde bir düğme olarak çıkıyor: onaylayabilir ya da ne düzeltileceğini yazabilirsiniz. Açık ve koyu tema var, telefon genişliğinde sütunlar alt alta diziliyor.
 
-İlanı ve CV'yi sürükleyip bırakabilir ya da metin olarak yapıştırabilirsiniz. Dosya türü ve 10 MB sınırı hem tarayıcıda hem sunucuda denetleniyor. Sayfa adresindeki `#run=...` kısmı sayesinde sekmeyi yenileseniz de süreç baştan oynatılıyor.
+İlanı ve CV'yi sürükleyip bırakabilir ya da metin olarak yapıştırabilirsiniz. Dosya türü ve 10 MB sınırı hem tarayıcıda hem sunucuda denetleniyor. Sayfa adresindeki `#run=...` kısmı sayesinde sekmeyi yenileseniz de süreç baştan oynatılıyor. Açılış sayfasındaki "Geçmiş çalıştırmalar" listesinde her kayıt için "yeniden oynat" ve "mülakat yap" düğmeleri var.
 
 | Seçenek | Açıklama |
 |---|---|
@@ -112,6 +120,37 @@ Komut `http://127.0.0.1:8765` adresinde bir sayfa açıyor ve tarayıcıyı da a
 Sunucu yalnızca `127.0.0.1` adresini dinliyor, başka adres seçeneği yok. Bunun üstüne iki kontrol daha koydum. Host başlığı `127.0.0.1` ya da `localhost` değilse istek reddediliyor (DNS rebinding'e karşı). Yazma istekleri başka bir sitenin sayfasından gelmişse, yani Origin başlığı bu sunucunun adresi değilse, reddediliyor. Yine de bir ağ servisi olarak tasarlanmadı: kimlik doğrulaması yok, aynı anda tek süreç çalışıyor.
 
 Arayüz düz HTML, CSS ve JavaScript. Derleme adımı ve CDN yok, `app/web/static/` altındaki üç dosyadan ibaret. Olaylar terminaldeki ile aynı Event Bus'tan geliyor, tarayıcıya SSE ile akıyor. Süreç arka plandaki bir iş parçacığında çalışıyor, orchestrator'ın mantığı web için kopyalanmadı.
+
+## Replay
+
+Her çalıştırmanın olayları `events.jsonl` dosyasına yazılıyor. Bu dosyadan bitmiş bir çalıştırmayı, canlı akıyormuş gibi yeniden oynatabiliyorsunuz. Model çağrılmıyor, hesap ya da limit harcanmıyor:
+
+```bash
+career-crew replay runs/2026-11-22_153000_ilan
+career-crew replay runs/2026-11-22_153000_ilan --hiz 2
+career-crew replay runs/2026-11-22_153000_ilan --aninda
+```
+
+Terminalde canlı çalıştırmayla aynı `Renderer` kullanılıyor, yani ekranda göreceğiniz şey aynı. Olaylar arasındaki bekleme özgün zamanlamaya göre, ama modelin düşündüğü uzun boşluklar 1,5 saniyeye kısalıyor. `--hiz 2` süreyi yarıya indiriyor, `--aninda` beklemeden hepsini yazıyor. Klasörde `events.jsonl` yoksa ya da bozuksa hangi satırda ne olduğunu söyleyen bir hata veriyor.
+
+Web arayüzünde aynı oynatma açılış sayfasından başlıyor ve konuşma, adımlar, skorlar ve CV karşılaştırması canlı bir çalıştırmadaki gibi doluyor. Hız menüsü var. `/?replay=<klasör>&adim=N` adresi ilk N olayı hemen gösteriyor, README'deki GIF'in kareleri böyle alındı.
+
+## Deneme mülakatı
+
+```bash
+career-crew mulakat runs/2026-11-22_153000_ilan --mod claude-code
+career-crew mulakat runs/2026-11-22_153000_ilan --betik --soru 4
+```
+
+Mülakatçı, çalıştırmanın `output/interview.md` dosyasındaki soruları sırayla soruyor (dosya yoksa soruları yeniden üretiyor), siz terminalde cevap yazıyorsunuz, o da cevabı orijinal CV'nize ve ilana göre değerlendiriyor. Soru sayısı `--soru` ile ayarlanıyor (varsayılan 5, en fazla 10). Boş bırakırsanız soru geçiliyor, `/bitir` yazarsanız mülakat bitiyor.
+
+Değerlendirmede asıl baktığı şey, cevapta CV'de olmayan bir deneyim, beceri, unvan ya da rakam iddiası olup olmadığı. Varsa iddiayı işaretliyor ve aynı konuyu CV'deki gerçek deneyimle ya da bir öğrenme planıyla nasıl anlatabileceğinizi öneriyor. Uydurma önermiyor. Bunun için kodda iki yedek var: cevaptaki, CV'de geçmeyen rakamlar model görmese bile "doğrula" uyarısıyla gösteriliyor, önerilen çerçevede CV'de olmayan bir rakam varsa öneri gösterilmiyor.
+
+Sonunda `output/mulakat_geri_bildirim.md` yazılıyor: güçlü cevaplar, geliştirilecek cevaplar, CV'de olmayan iddialar ve her cevabın değerlendirmesi. Limit dolarsa ya da yarıda keserseniz o ana kadarki cevapların geri bildirimi yine yazılıyor. Mülakat çalıştırmanın `state.json` ve `events.jsonl` dosyalarına dokunmuyor, kendi kaydı `work/interview_events.jsonl` içinde.
+
+`--betik` ile `mock` sağlayıcısı hazır cevapları kullanıyor (biri bilerek uydurma rakam içeriyor), demo ve testler böyle çalışıyor. `mock` değerlendirmeleri de hazır, yani yazdığınız cevaba göre değişmiyor. Gerçek değerlendirme için `claude-code` ya da `api` gerekiyor. Terminal etkileşimli değilse ve `mock` seçili değilse komut bunu söyleyip duruyor.
+
+Web arayüzünde geçmiş çalıştırmalar listesindeki "mülakat yap" düğmesi sohbet benzeri bir sayfa açıyor. Mülakatçı soruyu yazıyor, siz cevabı kutuya yazıyorsunuz, değerlendirme ve işaretler cevabın altında çıkıyor. `mock` modunda "Örnek cevabı yaz" düğmesi hazır cevabı kutuya koyuyor. `claude-code` modunda kısa bir mülakatı elle denedim: CV'de olmayan "7 yıl Kubernetes" iddiasını işaretledi. `api` modunu gerçek API ile denemedim, sahte istemciyle test ediliyor.
 
 ## Hafıza
 
@@ -209,7 +248,7 @@ runs/2026-11-21_143000_ilan/
 | 🛡️ Doğrulayıcı | Uydurma olup olmadığına karar verir | Sonnet |
 | 👔 İşe Alım Müdürü | 0-100 puan verir, en kritik 3 eksiği söyler | Haiku |
 | 💌 Mektup Yazarı | Ön yazı hazırlar | Sonnet |
-| 🎤 Mülakatçı | Mülakat soruları ve cevap ipuçları hazırlar | Haiku |
+| 🎤 Mülakatçı | Mülakat soruları ve cevap ipuçları hazırlar, deneme mülakatında soru sorar ve cevapları değerlendirir | Haiku |
 
 Modeller `app/agents/*.json` dosyalarından, promptlar `app/prompts/tr/` ve `app/prompts/en/` altından değiştirilebiliyor. Ajanlara kısa konuşmaları söylendi: en fazla üç cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
 
@@ -290,7 +329,9 @@ Görev durumlarını A2A'dan aldım: `submitted → working → completed / reje
 
 | Yol | Görev |
 |---|---|
-| `app/cli.py` | Argümanlar, renkli canlı akış, ilan okuma onayı, `web` komutu |
+| `app/cli.py` | Argümanlar, renkli canlı akış, ilan okuma onayı, `web`, `replay`, `mulakat` ve `ders` komutları |
+| `app/replay.py` | `events.jsonl` okuma, bekleme süreleri, oynatma |
+| `app/interview.py` | Deneme mülakatı: soru ayrıştırma, oturum, geri bildirim dosyası |
 | `app/web/` | FastAPI sunucusu (`server.py`) ve tek sayfalık arayüz (`static/`) |
 | `app/inputs.py` | `.md`, `.txt`, `.pdf`, `.docx` okuyucuları, boyut ve uzantı denetimi, görsel girdinin yönlendirilmesi |
 | `app/orchestrator.py` | Kariyer akışını kurar, çalıştırma klasörünü açar, en iyi turu seçer |
@@ -356,10 +397,16 @@ CAREER_CREW_LIVE=1 pytest -m live
 
 Bu testler ajan çağrısının kullanıcı eklentilerini ve MCP sunucularını yüklemediğine ve hiçbir araca erişmediğine bakıyor.
 
-README'deki GIF `mock` çalıştırmasından üretiliyor (macOS, Pillow gerekir):
+Terminal GIF'i `mock` çalıştırmasından üretiliyor (macOS, Pillow gerekir):
 
 ```bash
 python scripts/make_demo_gif.py docs/demo.gif
+```
+
+Web GIF'i ve `docs/web.png`, gerçek web sayfasının başsız Chrome'da alınmış ekran görüntülerinden yapılıyor (Chrome ya da Chromium ve Pillow gerekir, yolu bulamazsa `CHROME` ortam değişkenine yazın):
+
+```bash
+python scripts/make_web_gif.py
 ```
 
 Tasarım notları [KARIYER-EKIBI.md](KARIYER-EKIBI.md) dosyasında.
@@ -370,7 +417,7 @@ Tasarım notları [KARIYER-EKIBI.md](KARIYER-EKIBI.md) dosyasında.
 - [x] PDF ve DOCX girdisi
 - [x] M2: localhost web arayüzü, ilan görüntüsü ve taranmış PDF girdisi, İngilizce promptlar
 - [x] M3: hafıza, duraklatıp devam etme, PDF çıktı
-- [ ] M4: replay modu
+- [x] M4: replay modu, deneme mülakatı, web arayüzü görseli, yayın öncesi kontroller
 
 ## Esinlenmeler
 

@@ -303,14 +303,14 @@ Detaylar: [PROJECT.md](PROJECT.md) → 5.3.
 
 **Bitti sayılması için:** `mock` modunda süreç uçtan uca çalışıyor, `claude-code` modunda sahte CV ile gerçek bir başvuru paketi üretiliyor, testler geçiyor.
 
-### M2: Web arayüzü
+### M2: Web arayüzü ✅
 FastAPI + SSE, canlı konuşma ekranı, dosya yükleme (PDF/fotoğraf), önce/sonra karşılaştırması, İngilizce prompt seçeneği.
 
 ### M3: Hafıza ve dayanıklılık ✅
 Ders sistemi, limit dolunca duraklat/devam et, PDF çıktı.
 
-### M4: Vitrin
-Replay modu, README GIF'i, `examples/` demo konuşması, opsiyonel Telegram bildirimi, canlı deneme mülakatı.
+### M4: Vitrin ✅
+Replay modu (`career-crew replay`, web geçmiş listesi), canlı deneme mülakatı (`career-crew mulakat`, web sohbet sayfası, `ask_question` ve `evaluate_answer` skill'leri), web arayüzü GIF'i (başsız Chrome ile), yayın öncesi kontroller (agents/prompts paketin içine alındı). Telegram bildirimi kullanıcı istemediği için eklenmedi.
 
 ### GitHub'a yükleme
 M1 bittikten sonra, **kullanıcının onayıyla**.
