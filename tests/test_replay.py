@@ -149,3 +149,15 @@ def test_replay_does_not_block_a_live_run_and_rejects_bad_input(client, finished
     assert client.post("/api/replay", json={"dir": finished_run.name, "speed": 0}).status_code == 400
     assert client.post("/api/replay", json={"dir": finished_run.name, "upto": "3"}).status_code == 400
     assert client.post("/api/replay", json={}).status_code == 400
+
+
+def test_a_long_list_of_code_findings_is_folded_in_the_terminal(capsys):
+    from app.cli import Renderer
+    from app.registry import Registry
+    errs = [f"sorun {i}" for i in range(9)]
+    r = Renderer(Registry())
+    r(Event("checks", "code", {"errors": errs, "warnings": [], "ats_before": 1, "ats_after": 2}))
+    out = capsys.readouterr().out
+    assert "9 sorun" in out and "sorun 2" in out and "sorun 3" not in out and "6 sorun daha" in out
+    r(Event("checks", "code", {"errors": errs[:5], "warnings": [], "ats_before": 1, "ats_after": 2}))
+    assert "sorun 4" in capsys.readouterr().out  # a short list is shown in full

@@ -488,10 +488,21 @@ function handle(ev) {
       const p = $("p", m);
       p.textContent = `${d.errors.length ? d.errors.length + " sorun" : "Sorun yok"}. ATS %${d.ats_before} → %${d.ats_after}`;
       if (d.errors.length || d.warnings.length) {
+        const items = [...d.errors.map((x) => el("li", "e", "✗ " + x)), ...d.warnings.map((x) => el("li", "w", "! " + x))];
         const ul = el("ul");
-        d.errors.forEach((x) => ul.append(el("li", "e", "✗ " + x)));
-        d.warnings.forEach((x) => ul.append(el("li", "w", "! " + x)));
-        m.append(ul);
+        if (items.length > 5) {
+          // A long list is folded: the first three stay visible, the rest opens on click.
+          items.slice(0, 3).forEach((li) => ul.append(li));
+          const more = el("details");
+          more.append(el("summary", "", `${items.length - 3} sorun daha`));
+          const rest = el("ul");
+          items.slice(3).forEach((li) => rest.append(li));
+          more.append(rest);
+          m.append(ul, more);
+        } else {
+          items.forEach((li) => ul.append(li));
+          m.append(ul);
+        }
       }
       setStep("checks", d.errors.length ? "issue" : "done", d.errors.length ? d.errors.length + " sorun" : undefined);
       setAts("before", d.ats_before); setAts("after", d.ats_after);

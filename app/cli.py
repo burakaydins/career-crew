@@ -34,6 +34,7 @@ STATUS = {
     "evaluate_answer": "cevabı değerlendiriyor",
 }
 
+COLLAPSE_AFTER = 5  # a long list of code findings is shown as the first 3 plus a count
 EXIT_PAUSED = 75  # EX_TEMPFAIL: not an error, run again later with --devam
 
 
@@ -87,10 +88,15 @@ class Renderer:
                 errs = d["errors"]
                 head = "Sorun yok." if not errs else f"{len(errs)} sorun:"
                 console.print(f"{self.name('code')}: {head} ATS %{d['ats_before']} → %{d['ats_after']}")
-                for msg in errs:
+                shown = errs if len(errs) <= COLLAPSE_AFTER else errs[:3]
+                for msg in shown:
                     console.print(f"   [red]✗[/] {msg}")
-                for msg in d["warnings"]:
+                if len(shown) < len(errs):
+                    console.print(f"   [dim]… ve {len(errs) - len(shown)} sorun daha (tamamı events.jsonl içinde, düzeltmesi CV Yazarı'nda)[/]")
+                for msg in d["warnings"][:COLLAPSE_AFTER]:
                     console.print(f"   [yellow]![/] {msg}")
+                if len(d["warnings"]) > COLLAPSE_AFTER:
+                    console.print(f"   [dim]… ve {len(d['warnings']) - COLLAPSE_AFTER} uyarı daha[/]")
             case "warning":
                 console.print(f"[yellow]⚠️  {d['text']}[/]")
             case "task_failed":
