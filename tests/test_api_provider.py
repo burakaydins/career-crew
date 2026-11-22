@@ -1,6 +1,7 @@
 """ApiProvider against a fake Anthropic client: request shape, parsing and errors.
 No network and no API key needed."""
 
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -95,3 +96,43 @@ def test_api_errors_become_provider_errors(provider):
     provider.install(anthropic.APIConnectionError(request=req))
     with pytest.raises(ProviderError, match="bağlanılamadı"):
         provider.run(request("recruiter"))
+
+
+# ---- image and scanned-PDF reading (never run against the real API) ------------
+
+def test_transcribe_sends_an_image_block(provider):
+    provider.install(message(text="Backend Developer\n- Python"))
+    text = provider.transcribe("image/png", b"\x89PNGdata", "ilan")
+    (call,) = provider.calls
+    image, prompt = call["messages"][0]["content"]
+    assert image["type"] == "image" and image["source"]["media_type"] == "image/png"
+    assert image["source"]["type"] == "base64" and image["source"]["data"] == base64.b64encode(b"\x89PNGdata").decode()
+    assert "job posting" in prompt["text"]
+    assert "Do not summarize" in call["system"]
+    assert call["model"] == "claude-sonnet-5-5"
+    assert text == "Backend Developer\n- Python"
+
+
+def test_transcribe_sends_a_scanned_pdf_as_a_document_block(provider):
+    provider.install(message(text="CV metni"))
+    provider.transcribe("application/pdf", b"%PDF-1.4", "cv")
+    (call,) = provider.calls
+    block = call["messages"][0]["content"][0]
+    assert block["type"] == "document" and block["source"]["media_type"] == "application/pdf"
+
+
+def test_transcribe_rejects_huge_images_and_empty_replies(provider):
+    provider.install(message())
+    with pytest.raises(ProviderError, match="5 MB"):
+        provider.transcribe("image/jpeg", b"x" * (5 * 1024 * 1024 + 1), "cv")
+    assert provider.calls == []
+    provider.install(message(text="  "))
+    with pytest.raises(ProviderError, match="metin çıkaramadı"):
+        provider.transcribe("image/png", b"x", "cv")
+
+
+def test_transcribe_maps_api_errors(provider):
+    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    provider.install(anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=req), body=None))
+    with pytest.raises(ProviderError, match="API anahtarı"):
+        provider.transcribe("image/png", b"x", "cv")

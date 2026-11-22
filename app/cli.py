@@ -11,10 +11,10 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from app.events import Event, EventBus
-from app.inputs import InputError, read_document
+from app.inputs import ACCEPTED, InputError, read_input
 from app.orchestrator import Orchestrator, RunFailed, create_run_dir
 from app.providers.base import ProviderError
-from app.registry import Registry
+from app.registry import DEFAULT_LANG, LANGUAGES, Registry
 from app.skills import RunState
 
 console = Console(highlight=False)
@@ -110,41 +110,78 @@ def make_ask(auto_yes: bool):
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="career-crew", description="Çok ajanlı iş başvurusu asistanı.")
-    p.add_argument("--ilan", required=True, type=Path, help="İş ilanı (.md, .txt, .pdf, .docx)")
-    p.add_argument("--cv", required=True, type=Path, help="CV (.md, .txt, .pdf, .docx)")
+    p.add_argument("--ilan", required=True, type=Path, help="İş ilanı (.md, .txt, .pdf, .docx, .png, .jpg)")
+    p.add_argument("--cv", required=True, type=Path, help="CV (.md, .txt, .pdf, .docx, .png, .jpg)")
     p.add_argument("--mod", default="mock", choices=["mock", "claude-code", "api"], help="Model sağlayıcısı (varsayılan: mock)")
+    p.add_argument("--dil", default=DEFAULT_LANG, choices=LANGUAGES, help="Ajan promptlarının dili (varsayılan: tr)")
     p.add_argument("--runs", default=Path("runs"), type=Path, help="Çalıştırma klasörlerinin yeri (varsayılan: runs/)")
     p.add_argument("--evet", action="store_true", help="İlan okuma onayını sorma")
     p.add_argument("--hizli", action="store_true", help="mock modunda bekleme yapma")
     return p.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
-    texts = {}
-    for name, f in (("ilan", args.ilan), ("cv", args.cv)):
-        if not f.is_file():
-            console.print(f"[red]Dosya bulunamadı: {f}[/]")
-            return 2
-        try:
-            texts[name] = read_document(f)
-        except InputError as e:
-            console.print(f"[red]{e}[/]")
-            return 2
+def parse_web_args(argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog="career-crew web", description="Yerel web arayüzü (yalnızca 127.0.0.1).")
+    p.add_argument("--port", type=int, default=8765, help="Port (varsayılan: 8765)")
+    p.add_argument("--mod", default="mock", choices=["mock", "claude-code", "api"], help="Model sağlayıcısı (varsayılan: mock)")
+    p.add_argument("--dil", default=DEFAULT_LANG, choices=LANGUAGES, help="Varsayılan prompt dili (arayüzden değiştirilebilir)")
+    p.add_argument("--runs", default=Path("runs"), type=Path, help="Çalıştırma klasörlerinin yeri (varsayılan: runs/)")
+    p.add_argument("--hizli", action="store_true", help="mock modunda bekleme yapma")
+    p.add_argument("--acma", action="store_true", help="Tarayıcıyı kendiliğinden açma")
+    return p.parse_args(argv)
 
+
+def web_main(argv: list[str]) -> int:
+    args = parse_web_args(argv)
+    try:
+        provider = make_provider(args.mod, 0.0 if args.hizli else 0.6)
+    except ProviderError as e:
+        console.print(f"[red]{e}[/]")
+        return 2
+    from app.web.server import serve
+
+    try:
+        serve(provider, args.runs, args.mod, args.dil, args.port, open_browser=not args.acma)
+    except OSError as e:
+        console.print(f"[red]{e}[/]")
+        return 2
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "web":
+        return web_main(argv[1:])
+    args = parse_args(argv)
     try:
         provider = make_provider(args.mod, 0.0 if args.hizli else 0.6)
     except ProviderError as e:
         console.print(f"[red]{e}[/]")
         return 2
 
-    registry = Registry()
+    texts = {}
+    for name, f in (("ilan", args.ilan), ("cv", args.cv)):
+        if not f.is_file():
+            console.print(f"[red]Dosya bulunamadı: {f}[/]")
+            return 2
+        if f.suffix.lower() not in ACCEPTED:
+            console.print(f"[red]Desteklenmeyen dosya türü: {f.name} (desteklenenler: {', '.join(ACCEPTED)})[/]")
+            return 2
+        try:
+            texts[name] = read_input(f, provider, name)
+        except InputError as e:
+            console.print(f"[red]{e}[/]")
+            return 2
+
+    registry = Registry(lang=args.dil)
     bus = EventBus()
     bus.subscribe(Renderer(registry))
     run_dir = create_run_dir(args.runs, args.ilan, args.cv)
     # Keep the extracted text next to the originals: it is what the agents and checks saw.
     for name, f in (("ilan", args.ilan), ("cv", args.cv)):
-        if f.suffix.lower() in (".pdf", ".docx"):
+        if f.suffix.lower() not in (".md", ".txt"):
             (run_dir / "inputs" / f"{name}_metin.md").write_text(texts[name], encoding="utf-8")
     orch = Orchestrator(
         provider=provider,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 
-from app.providers.base import AgentRequest, AgentResult
+from app.providers.base import AgentRequest, AgentResult, ProviderError
 
 JOB = {
     "title": "Backend Developer (Python)",
@@ -224,3 +224,6 @@ class MockProvider:
             files=turn.get("files", {}),
             usage={"mock": True},
         )
+
+    def transcribe(self, media_type: str, data: bytes, kind: str) -> str:
+        raise ProviderError("mock modu görsel okuyamaz, --mod claude-code ya da --mod api kullanın")

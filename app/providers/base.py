@@ -71,3 +71,19 @@ def parse_envelope(text: str) -> AgentResult:
         data=data,
         files={str(k): str(v) for k, v in files.items()},
     )
+
+
+TRANSCRIBE_SYSTEM = (
+    "You transcribe documents. Copy the text exactly as written, in the original language, "
+    "as plain Markdown: '## ' for section headings, '- ' for list items. "
+    "Do not summarize, translate, correct, add or guess anything. Mark an unreadable part as [unreadable]. "
+    "Reply with the transcript only."
+)
+TRANSCRIBE_USER = {
+    "ilan": "This is a job posting. Transcribe all of its text.",
+    "cv": "This is a CV. Transcribe all of its text.",
+}
+
+
+def transcribe_prompt(kind: str) -> str:
+    return TRANSCRIBE_USER.get(kind, "Transcribe all of the text.")

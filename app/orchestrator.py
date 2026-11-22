@@ -72,6 +72,8 @@ def record_round(ctx: "Orchestrator") -> None:
         "clean": s.no_fabrication,
     }
     s.rounds.append(round_)
+    ctx.bus.publish("round_recorded", "code", iteration=s.iteration, score=s.score, errors=round_["errors"],
+                    decision=round_["decision"], clean=round_["clean"])
     # Best = clean beats unclean, then fewer code errors, then higher score.
     key = lambda r: (r["clean"], -r["errors"], r["score"])
     if s.best is None or key(round_) > key(s.best):
@@ -153,7 +155,7 @@ class Orchestrator:
         self.bus = bus or EventBus()
         self.bus.subscribe(JsonlSink(run_dir / "events.jsonl"))
         self.ask = ask
-        self.state = RunState(job_text=job_text, cv_text=cv_text, run_dir=run_dir)
+        self.state = RunState(job_text=job_text, cv_text=cv_text, run_dir=run_dir, lang=self.registry.lang)
         self.tasks: list[Task] = []
 
     def run_agent(self, agent: str, skill: str) -> None:
@@ -166,7 +168,7 @@ class Orchestrator:
         request = AgentRequest(
             card=card,
             skill=skill,
-            system_prompt=card.system_prompt(self.registry.root),
+            system_prompt=card.system_prompt(self.registry.root, self.registry.lang),
             user_prompt=build_prompt(self.state),
             workdir=self.state.run_dir,
             iteration=max(1, self.state.iteration),

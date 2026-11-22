@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>career-crew</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234F8EF7'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true"></span><strong>career-crew</strong></div>
+  <div class="top-right">
+    <span id="mode-badge" class="pill" title="Model sağlayıcısı"></span>
+    <button id="theme-btn" class="icon-btn" type="button" aria-label="Temayı değiştir" title="Açık / koyu tema">◐</button>
+  </div>
+</header>
+
+<main>
+  <section id="start" class="start">
+    <h1>İlana göre CV uyarla, uydurma yapmadan</h1>
+    <p class="lead">İlanı ve CV'ni ver. Altı ajan çalışır, sen konuşmayı canlı izlersin. Veriler yalnızca bu bilgisayarda ve seçili model sağlayıcısında kalır.</p>
+    <form id="form" novalidate>
+      <div class="drops">
+        <div class="drop-card" data-kind="ilan">
+          <h2>İş ilanı</h2>
+          <div class="dropzone" tabindex="0" role="button" aria-label="İlan dosyası seç">
+            <input type="file" accept=".md,.txt,.pdf,.docx,.png,.jpg,.jpeg" hidden>
+            <p class="dz-main">Dosyayı buraya bırak ya da tıkla</p>
+            <p class="dz-sub">.md .txt .pdf .docx .png .jpg · en fazla <span class="max-mb">10</span> MB</p>
+            <p class="dz-file" hidden></p>
+          </div>
+          <button type="button" class="link clear-file" hidden>Dosyayı kaldır</button>
+          <label class="or" for="ilan-text">ya da metni yapıştır</label>
+          <textarea id="ilan-text" rows="6" placeholder="İlan metni"></textarea>
+        </div>
+        <div class="drop-card" data-kind="cv">
+          <h2>CV</h2>
+          <div class="dropzone" tabindex="0" role="button" aria-label="CV dosyası seç">
+            <input type="file" accept=".md,.txt,.pdf,.docx,.png,.jpg,.jpeg" hidden>
+            <p class="dz-main">Dosyayı buraya bırak ya da tıkla</p>
+            <p class="dz-sub">.md .txt .pdf .docx .png .jpg · en fazla <span class="max-mb">10</span> MB</p>
+            <p class="dz-file" hidden></p>
+          </div>
+          <button type="button" class="link clear-file" hidden>Dosyayı kaldır</button>
+          <label class="or" for="cv-text">ya da metni yapıştır</label>
+          <textarea id="cv-text" rows="6" placeholder="CV metni"></textarea>
+        </div>
+      </div>
+      <div class="options">
+        <label>Ajan dili
+          <select id="lang">
+            <option value="tr">Türkçe</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="auto-yes"> İlan okumasını sorma, otomatik onayla</label>
+        <p id="mock-note" class="hint" hidden>mock modu hazır senaryoyu oynatır, ajanlar her zaman Türkçe konuşur.</p>
+      </div>
+      <p id="form-error" class="error" role="alert" hidden></p>
+      <button id="go" class="primary" type="submit">Başlat</button>
+      <p class="hint">Görsel ve taranmış PDF'ler model tarafından okunur (mock modunda okunamaz). Yapay zekâ çıktıları hatalı olabilir, göndermeden önce kendin kontrol et.</p>
+    </form>
+  </section>
+
+  <section id="run" class="run" hidden>
+    <div id="banner" class="banner" role="alert" hidden></div>
+    <div class="cols">
+      <aside class="col steps-col" aria-label="Süreç adımları">
+        <h2>Süreç</h2>
+        <ol id="steps" class="steps"></ol>
+        <p id="round-label" class="hint"></p>
+        <button id="new-run" class="secondary" type="button" hidden>Yeni başvuru</button>
+      </aside>
+
+      <section class="col chat-col" aria-label="Ajan konuşması">
+        <h2>Konuşma</h2>
+        <div id="chat" class="chat" aria-live="polite"></div>
+      </section>
+
+      <aside class="col out-col" aria-label="Çıktılar">
+        <h2>Skorlar</h2>
+        <div class="card scores">
+          <div class="score-main">
+            <div id="score-val" class="big">–</div>
+            <div class="small">İşveren puanı / 100</div>
+          </div>
+          <div class="ats">
+            <div class="ats-row"><span>ATS önce</span><div class="bar"><i id="ats-before" style="width:0"></i></div><b id="ats-before-t">–</b></div>
+            <div class="ats-row"><span>ATS sonra</span><div class="bar"><i id="ats-after" style="width:0"></i></div><b id="ats-after-t">–</b></div>
+          </div>
+          <ul id="rounds" class="rounds"></ul>
+        </div>
+
+        <h2>Dosyalar</h2>
+        <div class="card">
+          <ul id="files" class="files"><li class="hint">Süreç bitince burada görünür.</li></ul>
+        </div>
+
+        <h2>CV: önce / sonra</h2>
+        <div class="card">
+          <div id="compare" class="compare">
+            <div><h3>Orijinal</h3><pre id="cv-before" class="doc"></pre></div>
+            <div><h3>Uyarlanmış</h3><pre id="cv-after" class="doc"></pre></div>
+          </div>
+          <p class="legend"><span class="add">eklenen / değişen</span> <span class="del">çıkarılan</span></p>
+          <button id="expand" class="secondary" type="button">Büyüt</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<dialog id="viewer">
+  <div class="viewer-head"><strong id="viewer-title"></strong><button id="viewer-close" class="icon-btn" type="button" aria-label="Kapat">✕</button></div>
+  <div id="viewer-body"></div>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

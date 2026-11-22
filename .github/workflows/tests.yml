@@ -22,3 +22,9 @@ jobs:
       - run: pytest -q
       - name: mock demo runs end to end
         run: career-crew --ilan examples/ilan.md --cv examples/cv.md --evet --hizli
+      - name: web interface answers on localhost
+        run: |
+          career-crew web --acma --port 8765 --hizli &
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8765/api/config && break; sleep 0.5; done
+          curl -fs http://127.0.0.1:8765/ | grep -q career-crew
+          kill %1

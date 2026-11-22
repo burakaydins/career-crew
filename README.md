@@ -6,16 +6,19 @@
 
 ![career-crew demo: ilk turda eklenen uydurmalar kod kontrolünde yakalanıyor, ikinci turda CV düzeltiliyor](docs/demo.gif)
 
-Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı ajan sırayla çalışıp ilana göre düzenlenmiş bir CV, ön yazı, mülakat hazırlığı ve bir rapor çıkarıyor. Raporda işveren puanı, ATS skorunun önceki ve sonraki hâli, CV'de nelerin değiştiği ve kapanmayan eksikler var. Ajanların birbirine yazdıkları terminalde canlı akıyor, hangi maddenin neden değiştiğini oradan takip edebiliyorsunuz.
+Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı ajan sırayla çalışıp ilana göre düzenlenmiş bir CV, ön yazı, mülakat hazırlığı ve bir rapor çıkarıyor. Raporda işveren puanı, ATS skorunun önceki ve sonraki hâli, CV'de nelerin değiştiği ve kapanmayan eksikler var. Ajanların birbirine yazdıkları terminalde ya da yerel bir web sayfasında canlı akıyor, hangi maddenin neden değiştiğini oradan takip edebiliyorsunuz.
 
 ## İçindekiler
 
 - [Neden farklı?](#neden-farklı)
 - [Hızlı başlangıç](#hızlı-başlangıç)
+- [Web arayüzü](#web-arayüzü)
 - [Örnek çalıştırma](#örnek-çalıştırma)
 - [Nasıl çalışır?](#nasıl-çalışır)
 - [Mimari](#mimari)
 - [Modlar](#modlar)
+- [Diller](#diller)
+- [Görsel ve taranmış PDF girdisi](#görsel-ve-taranmış-pdf-girdisi)
 - [Gizlilik](#gizlilik)
 - [Geliştirme](#geliştirme)
 - [Yol haritası](#yol-haritası)
@@ -63,16 +66,46 @@ Kendi dosyalarınızla:
 career-crew --ilan ilan.pdf --cv cv.docx --mod api
 ```
 
-CV ve ilan `.md`, `.txt`, `.pdf` ya da `.docx` olabilir. PDF ve DOCX'ten çıkarılan metin, ajanların ve kontrollerin tam olarak neyi gördüğü bilinsin diye çalıştırma klasöründe `inputs/cv_metin.md` olarak saklanıyor. Taranmış (resim olarak kaydedilmiş) PDF'ler şimdilik okunamıyor.
+CV ve ilan `.md`, `.txt`, `.pdf` ya da `.docx` olabilir. İlanın ekran görüntüsü (`.png`, `.jpg`) ve taranmış PDF de verilebilir, [aşağıda](#görsel-ve-taranmış-pdf-girdisi) anlattım. PDF, DOCX ve görsellerden çıkarılan metin, ajanların ve kontrollerin tam olarak neyi gördüğü bilinsin diye çalıştırma klasöründe `inputs/cv_metin.md` olarak saklanıyor.
+
+Tarayıcıda kullanmak isterseniz:
+
+```bash
+career-crew web
+```
 
 | Seçenek | Açıklama |
 |---|---|
-| `--ilan` | İş ilanı (`.md`, `.txt`, `.pdf`, `.docx`) |
-| `--cv` | CV (`.md`, `.txt`, `.pdf`, `.docx`) |
+| `--ilan` | İş ilanı (`.md`, `.txt`, `.pdf`, `.docx`, `.png`, `.jpg`) |
+| `--cv` | CV (aynı türler) |
 | `--mod` | `mock` (varsayılan), `claude-code` ya da `api` |
+| `--dil` | Ajan promptlarının dili: `tr` (varsayılan) ya da `en` |
 | `--runs` | Çalıştırma klasörlerinin yeri (varsayılan `runs/`) |
 | `--evet` | İlan okuma onayını sorma |
 | `--hizli` | `mock` modunda bekleme yapma |
+
+## Web arayüzü
+
+```bash
+career-crew web
+```
+
+Komut `http://127.0.0.1:8765` adresinde bir sayfa açıyor ve tarayıcıyı da açıyor. Üç sütunu var. Solda süreç adımları ve durumları, ortada ajanların canlı konuşması, sağda skorlar, çıktı dosyaları ve orijinal CV ile uyarlanmış CV'nin karşılaştırması (eklenen satırlar yeşil, çıkarılanlar kırmızı, "Büyüt" ile iki CV yan yana açılıyor). İlan okuma onayı terminaldeki soru yerine konuşmanın içinde bir düğme olarak çıkıyor: onaylayabilir ya da ne düzeltileceğini yazabilirsiniz. Açık ve koyu tema var, telefon genişliğinde sütunlar alt alta diziliyor.
+
+İlanı ve CV'yi sürükleyip bırakabilir ya da metin olarak yapıştırabilirsiniz. Dosya türü ve 10 MB sınırı hem tarayıcıda hem sunucuda denetleniyor. Sayfa adresindeki `#run=...` kısmı sayesinde sekmeyi yenileseniz de süreç baştan oynatılıyor.
+
+| Seçenek | Açıklama |
+|---|---|
+| `--port` | Port (varsayılan `8765`) |
+| `--mod` | Model sağlayıcısı. Web arayüzünde sunucuyu başlatırken seçiliyor |
+| `--dil` | Varsayılan prompt dili, sayfadan değiştirilebiliyor |
+| `--runs` | Çalıştırma klasörlerinin yeri |
+| `--hizli` | `mock` modunda bekleme yapma |
+| `--acma` | Tarayıcıyı kendiliğinden açma |
+
+Sunucu yalnızca `127.0.0.1` adresini dinliyor, başka adres seçeneği yok. Bunun üstüne iki kontrol daha koydum. Host başlığı `127.0.0.1` ya da `localhost` değilse istek reddediliyor (DNS rebinding'e karşı). Yazma istekleri başka bir sitenin sayfasından gelmişse, yani Origin başlığı bu sunucunun adresi değilse, reddediliyor. Yine de bir ağ servisi olarak tasarlanmadı: kimlik doğrulaması yok, aynı anda tek süreç çalışıyor.
+
+Arayüz düz HTML, CSS ve JavaScript. Derleme adımı ve CDN yok, `app/web/static/` altındaki üç dosyadan ibaret. Olaylar terminaldeki ile aynı Event Bus'tan geliyor, tarayıcıya SSE ile akıyor. Süreç arka plandaki bir iş parçacığında çalışıyor, orchestrator'ın mantığı web için kopyalanmadı.
 
 ## Örnek çalıştırma
 
@@ -125,7 +158,7 @@ runs/2026-11-21_143000_ilan/
 | 💌 Mektup Yazarı | Ön yazı hazırlar | Sonnet |
 | 🎤 Mülakatçı | Mülakat soruları ve cevap ipuçları hazırlar | Haiku |
 
-Modeller `agents/*.json` dosyalarından, promptlar `prompts/tr/` altından değiştirilebiliyor. Ajanlara kısa konuşmaları söylendi: en fazla üç cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
+Modeller `agents/*.json` dosyalarından, promptlar `prompts/tr/` ve `prompts/en/` altından değiştirilebiliyor. Ajanlara kısa konuşmaları söylendi: en fazla üç cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
 
 ### Akış
 
@@ -160,12 +193,13 @@ Kontrol üç aşamada yapılıyor. Önce CV Yazarı her maddeyi orijinal CV'den 
 ```mermaid
 flowchart TB
     CLI["CLI<br/>app/cli.py"]
+    WEB["Web arayüzü<br/>app/web/"]
     BUS["Event Bus<br/>app/events.py"]
     LOG[("events.jsonl")]
     ORCH["Orchestrator<br/>app/orchestrator.py"]
     WF["Workflow<br/>Sequential · Parallel · Loop · UserGate<br/>app/workflow.py"]
     SKILLS["Skill'ler<br/>prompt + sonuç işleme<br/>app/skills.py"]
-    REG["Registry<br/>agents/*.json · prompts/tr/"]
+    REG["Registry<br/>agents/*.json · prompts/tr · prompts/en"]
     CHECKS["Kod kontrolleri<br/>app/checks/"]
     REPORT["Rapor<br/>app/report.py"]
     RUN[("runs/…/<br/>inputs · work · output")]
@@ -178,6 +212,8 @@ flowchart TB
 
     CLI -->|ilan + CV| ORCH
     CLI -. kullanıcı onayı .-> ORCH
+    WEB -->|ilan + CV| ORCH
+    WEB -. onay düğmesi .-> ORCH
     ORCH --> WF
     WF -->|ajan adımı| SKILLS
     SKILLS --> REG
@@ -189,29 +225,32 @@ flowchart TB
     REPORT --> RUN
     ORCH -->|olaylar| BUS
     BUS --> CLI
+    BUS -->|SSE| WEB
     BUS --> LOG
 ```
 
 Ajanlara hiç araç vermedim. İlan, CV ve önceki sürüm doğrudan prompta ekleniyor, her ajan da `{"message", "data", "files"}` biçiminde tek bir JSON döndürüyor. Dosyaları ajanlar değil orchestrator yazıyor ve her skill sadece kendi dosya adlarını yazabiliyor. Bu sayede üç mod aynı şekilde çalışıyor ve `claude-code` modunda bile ajanların dosya ya da shell erişimi olmuyor.
 
-Workflow parçaları (`Sequential`, `Parallel`, `Loop`, `UserGate`) iş akışının ne olduğunu bilmiyor, sadece bir bağlam nesnesiyle konuşuyor. Kariyer akışı bu parçalarla [orchestrator.py](app/orchestrator.py) içinde kuruluyor. Terminal çıktısı ve `events.jsonl` aynı Event Bus'tan besleniyor. M2'deki web arayüzü de aynı olayları SSE ile alacak.
+Workflow parçaları (`Sequential`, `Parallel`, `Loop`, `UserGate`) iş akışının ne olduğunu bilmiyor, sadece bir bağlam nesnesiyle konuşuyor. Kariyer akışı bu parçalarla [orchestrator.py](app/orchestrator.py) içinde kuruluyor. Terminal çıktısı, `events.jsonl` ve web arayüzü aynı Event Bus'tan besleniyor. Web tarafı olayları SSE ile alıyor.
 
 Görev durumlarını A2A'dan aldım: `submitted → working → completed / rejected / failed / input-required`.
 
 | Yol | Görev |
 |---|---|
-| `app/cli.py` | Argümanlar, renkli canlı akış, ilan okuma onayı |
+| `app/cli.py` | Argümanlar, renkli canlı akış, ilan okuma onayı, `web` komutu |
+| `app/web/` | FastAPI sunucusu (`server.py`) ve tek sayfalık arayüz (`static/`) |
+| `app/inputs.py` | `.md`, `.txt`, `.pdf`, `.docx` okuyucuları, boyut ve uzantı denetimi, görsel girdinin yönlendirilmesi |
 | `app/orchestrator.py` | Kariyer akışını kurar, çalıştırma klasörünü açar, en iyi turu seçer |
 | `app/workflow.py` | Akış yapı taşları: `Sequential`, `Parallel`, `Loop`, `CodeStep`, `UserGate` |
 | `app/skills.py` | Skill başına prompt üretimi, yanıt doğrulama ve durum güncellemesi |
 | `app/tasks.py` | `Task`, `Message`, `TextPart`, `FilePart`, `DataPart`, `Artifact` |
 | `app/events.py` | Event Bus ve `events.jsonl` kaydı |
-| `app/registry.py` | Agent Card'ları ve promptları yükler |
+| `app/registry.py` | Agent Card'ları ve seçilen dildeki promptları yükler |
 | `app/providers/` | `mock`, `claude_code`, `api` ve ortak JSON zarfı ayrıştırıcısı |
 | `app/checks/` | `coverage`, `evidence`, `leakage`, `dates`, `numbers`, `titles`, `structure`, `ats` |
 | `app/report.py` | `report.md`: skorlar, turlar, açık sorunlar, değişiklikler |
 | `agents/` | 6 Agent Card: model, efor, renk, prompt dosyası |
-| `prompts/tr/` | Türkçe rol promptları ve ortak konuşma sözleşmesi |
+| `prompts/tr/`, `prompts/en/` | Rol promptları ve ortak konuşma sözleşmesi, iki dilde |
 
 ## Modlar
 
@@ -227,9 +266,25 @@ Görev durumlarını A2A'dan aldım: `submitted → working → completed / reje
 
 > Kullanım şartları: `claude-code` modu herkesin kendi aboneliğiyle, kendi bilgisayarında kişisel kullanımı için var. Proje bir hizmet olarak sunulmuyor. Claude Code giriş bilgileri okunmuyor ya da başka bir yere taşınmıyor, sadece resmî `claude` komutu çağrılıyor. Bu modu kullananlar Anthropic kullanım şartlarına uymaktan kendileri sorumlu.
 
+## Diller
+
+`--dil tr|en` ya da web arayüzündeki dil seçimi, ajanların hangi dilde yazılmış prompt aldığını belirliyor. `registry.py` `prompts/tr/` ya da `prompts/en/` klasörünü seçiyor, kullanıcı prompt'undaki başlıklar da aynı dilde gidiyor. Kurallar iki dilde aynı: uydurma yasağı, kanıt alıntısı, JSON zarfı, 80 puan eşiği. Ajanların ürettiği CV, ön yazı ve mülakat notu promptun dilinden bağımsız olarak orijinal CV'nin dilinde yazılıyor, yani İngilizce promptla Türkçe bir CV'yi uyarlarsanız çıktı Türkçe kalıyor.
+
+İki sınır var. `mock` sağlayıcısı hazır bir Türkçe senaryo oynattığı için `--dil en` ile de Türkçe konuşuyor. Kod kontrollerinin hata mesajları (örneğin "Kanıt orijinal CV'de bulunamadı") ve rapor da şimdilik Türkçe, İngilizce çalıştırmada bu mesajlar yazara Türkçe gidiyor.
+
+## Görsel ve taranmış PDF girdisi
+
+İlanın ekran görüntüsünü (`.png`, `.jpg`) ya da metin katmanı olmayan taranmış bir PDF'i verebilirsiniz. Metin çıkmadığında dosya modele gönderiliyor, model sadece içindeki yazıyı aynen yazıya döküyor (özetlemiyor, çevirmiyor), sonuç `inputs/*_metin.md` olarak saklanıyor ve sonrası normal akış. Ajanlar ve kontroller bu dökümü orijinal metin sayıyor, o yüzden okuma hatası olursa CV'deki "kanıt" da o hataya dayanır. Döküm dosyasına bakmanızı öneririm.
+
+| Mod | Durum |
+|---|---|
+| `claude-code` | `claude -p` komutuna `--input-format stream-json` ile görsel ve PDF bloğu gönderiliyor. Bir ilan görüntüsüyle ve taranmış bir PDF ile elle denedim, çalıştı. Ajanlarda olduğu gibi araçsız ve ayarsız çalışıyor |
+| `api` | Görsel için `image`, PDF için `document` bloğu gönderiliyor (görsel 5 MB ile sınırlı, API kuralı). Gerçek API ile denenmedi, anahtarım olmadığı için. İstek biçimi sahte istemciyle test ediliyor |
+| `mock` | Görsel okuyamaz, bunu söyleyen bir hata veriyor |
+
 ## Gizlilik
 
-`runs/`, `memory/` ve `.env` `.gitignore`'da. Repodaki örnek CV ve ilan sahte. Veriler seçilen model sağlayıcısı dışında bir yere gönderilmiyor, analitik ya da izleme yok.
+`runs/`, `memory/` ve `.env` `.gitignore`'da. Repodaki örnek CV ve ilan sahte. Veriler seçilen model sağlayıcısı dışında bir yere gönderilmiyor, analitik ya da izleme yok. Web arayüzü yalnızca bu bilgisayardan erişilebiliyor. Yüklenen dosyalar geçici klasörde tutulup işlem bitince siliniyor, kopyaları `runs/` altında kalıyor.
 
 ## Geliştirme
 
@@ -257,7 +312,7 @@ Tasarım notları [KARIYER-EKIBI.md](KARIYER-EKIBI.md) dosyasında.
 
 - [x] M1: çekirdek, terminal arayüzü, uydurma kontrolleri
 - [x] PDF ve DOCX girdisi
-- [ ] M2: localhost web arayüzü, fotoğraf ve taranmış PDF girdisi, İngilizce promptlar
+- [x] M2: localhost web arayüzü, ilan görüntüsü ve taranmış PDF girdisi, İngilizce promptlar
 - [ ] M3: hafıza, duraklatıp devam etme, PDF çıktı
 - [ ] M4: replay modu
 

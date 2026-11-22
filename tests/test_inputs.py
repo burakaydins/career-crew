@@ -31,7 +31,7 @@ def test_reads_cp1254_text(tmp_path):
 
 def test_rejects_unsupported_and_empty(tmp_path):
     with pytest.raises(InputError, match="Desteklenmeyen"):
-        read_document(tmp_path / "cv.jpg")
+        read_document(tmp_path / "cv.gif")  # .jpg is an image input since M2
     empty = tmp_path / "bos.txt"
     empty.write_text("kısa", encoding="utf-8")
     with pytest.raises(InputError, match="yeterli metin"):
@@ -56,3 +56,9 @@ def test_cli_mock_with_pdf_and_docx(tmp_path, name):
     (run,) = tmp_path.iterdir()
     assert (run / "inputs" / "cv_metin.md").exists()
     assert (run / "output" / "report.md").exists()
+
+
+def test_bold_lines_are_not_turned_into_bullets():
+    from app.inputs import normalize_bullets
+
+    assert normalize_bullets("**Şirket:** Hayali\n* madde\n• başka") == "**Şirket:** Hayali\n- madde\n- başka"

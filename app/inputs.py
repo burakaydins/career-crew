@@ -9,19 +9,45 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from app.providers.base import ProviderError
+
 SUPPORTED = (".md", ".txt", ".pdf", ".docx")
-BULLET_CHARS = "•●▪◦‣∙·–—*"
-_BULLET_LINE = re.compile(rf"^\s*[{re.escape(BULLET_CHARS)}]\s*")
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
+ACCEPTED = SUPPORTED + IMAGE_SUFFIXES
+MAX_BYTES = 10 * 1024 * 1024
+MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pdf": "application/pdf"}
+MIN_WORDS = 20
+BULLET_CHARS = "•●▪◦‣∙·–—"
+# "*" is a bullet only before a space: "**Şirket:**" is bold text, not a list item.
+_BULLET_LINE = re.compile(rf"^\s*(?:[{re.escape(BULLET_CHARS)}]\s*|\*\s+)")
 
 
 class InputError(ValueError):
     pass
 
 
+class NeedsVision(InputError):
+    """The file holds no readable text (a picture or a scanned PDF): a model has to look at it."""
+
+
+def check_upload(name: str, size: int) -> str:
+    """Validate an uploaded file by name and size. Returns the lowercase suffix."""
+    suffix = Path(name).suffix.lower()
+    if suffix not in ACCEPTED:
+        raise InputError(f"Desteklenmeyen dosya türü: {Path(name).name} (desteklenenler: {', '.join(ACCEPTED)})")
+    if size > MAX_BYTES:
+        raise InputError(f"{Path(name).name} çok büyük ({size / 1024 / 1024:.1f} MB), sınır {MAX_BYTES // 1024 // 1024} MB")
+    if size == 0:
+        raise InputError(f"{Path(name).name} boş")
+    return suffix
+
+
 def read_document(path: Path) -> str:
     suffix = path.suffix.lower()
+    if suffix in IMAGE_SUFFIXES:
+        raise NeedsVision(f"{path.name} bir görsel, metne çevrilmesi gerekiyor")
     if suffix not in SUPPORTED:
-        raise InputError(f"Desteklenmeyen dosya türü: {path.name} (desteklenenler: {', '.join(SUPPORTED)})")
+        raise InputError(f"Desteklenmeyen dosya türü: {path.name} (desteklenenler: {', '.join(ACCEPTED)})")
     if suffix in (".md", ".txt"):
         text = _read_text(path)
     elif suffix == ".pdf":
@@ -32,9 +58,30 @@ def read_document(path: Path) -> str:
     if suffix in (".pdf", ".txt"):
         text = promote_headings(text)
     text = text.strip()
-    if len(text.split()) < 20:
-        raise InputError(f"{path.name} içinden yeterli metin çıkmadı. Taranmış bir PDF olabilir, metin olarak kaydedip deneyin.")
+    if len(text.split()) < MIN_WORDS:
+        if suffix == ".pdf":
+            raise NeedsVision(f"{path.name} içinden yeterli metin çıkmadı, taranmış bir PDF olabilir")
+        raise InputError(f"{path.name} içinden yeterli metin çıkmadı")
     return text + "\n"
+
+
+def read_input(path: Path, provider, kind: str) -> str:
+    """Like read_document, but pictures and scanned PDFs are read by the provider's model.
+    `kind` is "ilan" or "cv". The transcript is what the agents and checks treat as the source text."""
+    try:
+        return read_document(path)
+    except NeedsVision:
+        transcribe = getattr(provider, "transcribe", None)
+        if transcribe is None:
+            raise
+        try:
+            text = transcribe(MEDIA_TYPES[path.suffix.lower()], path.read_bytes(), kind)
+        except ProviderError as e:
+            raise InputError(f"{path.name} okunamadı: {e}") from e
+        text = normalize_bullets(text).strip()
+        if len(text.split()) < MIN_WORDS:
+            raise InputError(f"{path.name} içinden yeterli metin okunamadı")
+        return text + "\n"
 
 
 def normalize_bullets(text: str) -> str:

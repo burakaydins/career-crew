@@ -5,7 +5,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from app.providers.base import AgentRequest, AgentResult, ProviderError, parse_envelope
+import base64
+
+from app.providers.base import (
+    TRANSCRIBE_SYSTEM, AgentRequest, AgentResult, ProviderError, parse_envelope, transcribe_prompt,
+)
 
 MODELS = {
     "sonnet": "claude-sonnet-5-5",
@@ -15,6 +19,7 @@ MODELS = {
 # Models that support the server-side refusal fallback. Haiku 5.5 has none.
 FALLBACK_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5"}
 MAX_TOKENS = 32000
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # the API rejects larger images
 
 
 def _load_dotenv(path: Path = Path(".env")) -> None:
@@ -38,19 +43,7 @@ class ApiProvider:
         self._anthropic = anthropic
         self.client = anthropic.Anthropic()
 
-    def run(self, request: AgentRequest) -> AgentResult:
-        card = request.card
-        model = MODELS.get(card.model, card.model)
-        kwargs = dict(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            system=request.system_prompt,
-            messages=[{"role": "user", "content": request.user_prompt}],
-            output_config={"effort": card.effort},
-        )
-        if model in FALLBACK_MODELS:
-            kwargs.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-
+    def _complete(self, kwargs: dict):
         a = self._anthropic
         try:
             with self.client.beta.messages.stream(**kwargs) as stream:
@@ -68,7 +61,47 @@ class ApiProvider:
             raise ProviderError("Model isteği reddetti")
         if response.stop_reason == "max_tokens":
             raise ProviderError("Yanıt token sınırında kesildi")
+        return response
 
+    def transcribe(self, media_type: str, data: bytes, kind: str) -> str:
+        """Reads a picture or a scanned PDF with the model and returns its text."""
+        if media_type != "application/pdf" and len(data) > MAX_IMAGE_BYTES:
+            raise ProviderError("API 5 MB'tan büyük görselleri kabul etmiyor, küçültüp deneyin")
+        block_type = "document" if media_type == "application/pdf" else "image"
+        content = [
+            {"type": block_type, "source": {"type": "base64", "media_type": media_type, "data": base64.b64encode(data).decode()}},
+            {"type": "text", "text": transcribe_prompt(kind)},
+        ]
+        model = MODELS["sonnet"]
+        kwargs = dict(
+            model=model,
+            max_tokens=MAX_TOKENS,
+            system=TRANSCRIBE_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+            output_config={"effort": "low"},
+        )
+        if model in FALLBACK_MODELS:
+            kwargs.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        response = self._complete(kwargs)
+        text = "".join(b.text for b in response.content if b.type == "text").strip()
+        if not text:
+            raise ProviderError("Model görselden metin çıkaramadı")
+        return text
+
+    def run(self, request: AgentRequest) -> AgentResult:
+        card = request.card
+        model = MODELS.get(card.model, card.model)
+        kwargs = dict(
+            model=model,
+            max_tokens=MAX_TOKENS,
+            system=request.system_prompt,
+            messages=[{"role": "user", "content": request.user_prompt}],
+            output_config={"effort": card.effort},
+        )
+        if model in FALLBACK_MODELS:
+            kwargs.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+
+        response = self._complete(kwargs)
         text = "".join(b.text for b in response.content if b.type == "text")
         result = parse_envelope(text)
         result.usage = {

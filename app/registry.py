@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CONTRACT_FILE = "prompts/tr/_contract.md"
+LANGUAGES = ("tr", "en")
+DEFAULT_LANG = "tr"
 
 
 @dataclass
@@ -22,15 +23,20 @@ class AgentCard:
     promptFile: str
     allowedTools: list[str] = field(default_factory=list)
 
-    def system_prompt(self, root: Path = ROOT) -> str:
-        role = (root / self.promptFile).read_text(encoding="utf-8").strip()
-        contract = (root / CONTRACT_FILE).read_text(encoding="utf-8").strip()
+    def system_prompt(self, root: Path = ROOT, lang: str = DEFAULT_LANG) -> str:
+        # promptFile names the default (Turkish) prompt; other languages use the same file name.
+        folder = root / "prompts" / lang
+        role = (folder / Path(self.promptFile).name).read_text(encoding="utf-8").strip()
+        contract = (folder / "_contract.md").read_text(encoding="utf-8").strip()
         return f"{role}\n\n{contract}\n"
 
 
 class Registry:
-    def __init__(self, root: Path = ROOT) -> None:
+    def __init__(self, root: Path = ROOT, lang: str = DEFAULT_LANG) -> None:
+        if lang not in LANGUAGES:
+            raise ValueError(f"Desteklenmeyen dil: {lang} (desteklenenler: {', '.join(LANGUAGES)})")
         self.root = root
+        self.lang = lang
         self.cards: dict[str, AgentCard] = {}
         for path in sorted((root / "agents").glob("*.json")):
             card = AgentCard(**json.loads(path.read_text(encoding="utf-8")))

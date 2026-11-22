@@ -6,14 +6,26 @@ binary is called; credentials are never read or copied.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 
-from app.providers.base import AgentRequest, AgentResult, ProviderError, parse_envelope
+from app.providers.base import (
+    TRANSCRIBE_SYSTEM, AgentRequest, AgentResult, ProviderError, parse_envelope, transcribe_prompt,
+)
 
 TIMEOUT_SECONDS = 600
+
+
+@dataclass
+class _TranscriberCard:
+    """Just enough of an AgentCard for build_command."""
+    model: str = "sonnet"
+    effort: str = "low"
 
 
 class ClaudeCodeProvider:
@@ -56,14 +68,14 @@ class ClaudeCodeProvider:
                 env.pop(key)
         return env
 
-    def run(self, request: AgentRequest) -> AgentResult:
+    def _invoke(self, command: list[str], stdin: str, cwd) -> dict:
         try:
             proc = subprocess.run(
-                self.build_command(request),
-                input=request.user_prompt,
+                command,
+                input=stdin,
                 capture_output=True,
                 text=True,
-                cwd=request.workdir,
+                cwd=cwd,
                 env=self.build_env(),
                 timeout=TIMEOUT_SECONDS,
             )
@@ -83,7 +95,10 @@ class ClaudeCodeProvider:
             raise ProviderError(f"claude hata verdi (kod {proc.returncode}): {proc.stderr.strip()[:500]}")
         if final.get("is_error"):
             raise ProviderError(f"claude hata verdi: {str(final.get('result'))[:500]}")
+        return final
 
+    def run(self, request: AgentRequest) -> AgentResult:
+        final = self._invoke(self.build_command(request), request.user_prompt, request.workdir)
         result = parse_envelope(final.get("result", ""))
         result.usage = {
             "cost_usd": final.get("total_cost_usd"),
@@ -91,3 +106,23 @@ class ClaudeCodeProvider:
             **(final.get("usage") or {}),
         }
         return result
+
+    def build_transcribe_command(self) -> list[str]:
+        # Same isolation as agents; the picture goes in as a stream-json user message.
+        command = self.build_command(AgentRequest(
+            card=_TranscriberCard(), skill="transcribe", system_prompt=TRANSCRIBE_SYSTEM, user_prompt="", workdir=Path("."),
+        ))
+        return command + ["--input-format", "stream-json"]
+
+    def transcribe(self, media_type: str, data: bytes, kind: str) -> str:
+        """Reads a picture or a scanned PDF through `claude -p` and returns its text."""
+        block_type = "document" if media_type == "application/pdf" else "image"
+        message = {"type": "user", "message": {"role": "user", "content": [
+            {"type": block_type, "source": {"type": "base64", "media_type": media_type, "data": base64.b64encode(data).decode()}},
+            {"type": "text", "text": transcribe_prompt(kind)},
+        ]}}
+        final = self._invoke(self.build_transcribe_command(), json.dumps(message) + "\n", Path.cwd())
+        text = str(final.get("result", "")).strip()
+        if not text:
+            raise ProviderError("Model görselden metin çıkaramadı")
+        return text
