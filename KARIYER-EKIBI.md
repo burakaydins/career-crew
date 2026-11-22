@@ -310,7 +310,7 @@ FastAPI + SSE, canlı konuşma ekranı, dosya yükleme (PDF/fotoğraf), önce/so
 Ders sistemi, limit dolunca duraklat/devam et, PDF çıktı.
 
 ### M4: Vitrin ✅
-Replay modu (`career-crew replay`, web geçmiş listesi), canlı deneme mülakatı (`career-crew mulakat`, web sohbet sayfası, `ask_question` ve `evaluate_answer` skill'leri), web arayüzü GIF'i (başsız Chrome ile), yayın öncesi kontroller (agents/prompts paketin içine alındı). Telegram bildirimi kullanıcı istemediği için eklenmedi.
+Replay modu (`career-crew replay`, web geçmiş listesi), canlı deneme mülakatı (`career-crew mulakat`, web sohbet sayfası, `ask_question` ve `evaluate_answer` skill'leri), web arayüzü GIF'i (başsız Chrome ile), yayın öncesi kontroller (agents/prompts paketin içine alındı).
 
 ### GitHub'a yükleme
 M1 bittikten sonra, **kullanıcının onayıyla**.
