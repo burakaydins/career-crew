@@ -220,3 +220,8 @@ def test_claude_code_limit_without_result_line(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda b: "/usr/bin/claude")
     with pytest.raises(RateLimited):
         ClaudeCodeProvider()._invoke(["claude"], "x", ".")
+
+
+def test_runs_started_in_the_same_second_get_separate_folders(tmp_path):
+    a, b = new_run(tmp_path), new_run(tmp_path)
+    assert a != b and a.is_dir() and b.is_dir()

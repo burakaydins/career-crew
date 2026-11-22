@@ -46,9 +46,13 @@ def slugify(text: str) -> str:
 
 def create_run_dir(base: Path, job_file: Path, cv_file: Path) -> Path:
     stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    run_dir = base / f"{stamp}_{slugify(job_file.stem)}"
+    name = f"{stamp}_{slugify(job_file.stem)}"
+    run_dir, n = base / name, 1
+    while run_dir.exists():  # two runs in the same second must not share a folder
+        n += 1
+        run_dir = base / f"{name}-{n}"
     for sub in ("inputs", "work", "output"):
-        (run_dir / sub).mkdir(parents=True, exist_ok=True)
+        (run_dir / sub).mkdir(parents=True)
     shutil.copy(job_file, run_dir / "inputs" / f"ilan{job_file.suffix}")
     shutil.copy(cv_file, run_dir / "inputs" / f"cv{cv_file.suffix}")
     return run_dir
