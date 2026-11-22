@@ -331,5 +331,5 @@ M1 bittikten sonra, **kullanıcının onayıyla**.
 ## 15. Açık Kararlar
 
 1. ~~Repo ve klasör adı~~ → **`career-crew`**
-2. ~~Kalıcı klasör konumu~~ → `/Users/burakaydin/career-crew`
+2. ~~Kalıcı klasör konumu~~ → repo kökü
 3. ~~Ajanların dili~~ → Varsayılan **Türkçe**, İngilizce seçeneği M2'de.

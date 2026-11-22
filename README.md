@@ -10,6 +10,15 @@ Aynı çalıştırma web arayüzünde:
 
 ![career-crew web arayüzü: solda adımlar, ortada ajanların konuşması, sağda skorlar ve CV karşılaştırması](docs/web-demo.gif)
 
+Denemek için hesap gerekmiyor, sahte bir CV ve ilanla çalışan `mock` modu var:
+
+```bash
+git clone https://github.com/burakaydins/career-crew.git && cd career-crew
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[api,dev]"
+career-crew --ilan examples/ilan.md --cv examples/cv.md
+```
+
 Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı ajan sırayla çalışıp ilana göre düzenlenmiş bir CV, ön yazı, mülakat hazırlığı ve bir rapor çıkarıyor. Raporda işveren puanı, ATS skorunun önceki ve sonraki hâli, CV'de nelerin değiştiği ve kapanmayan eksikler var. Ajanların birbirine yazdıkları terminalde ya da yerel bir web sayfasında canlı akıyor, hangi maddenin neden değiştiğini oradan takip edebiliyorsunuz.
 
 ## İçindekiler
