@@ -5,13 +5,14 @@ from app.orchestrator import Orchestrator, create_run_dir
 from app.providers.mock import MockProvider
 from app.registry import LANGUAGES, Registry
 from conftest import ROOT
+from app.registry import ROOT as APP
 
 
 def test_every_language_has_all_six_roles_and_a_contract():
-    names = {p.name for p in (ROOT / "prompts" / "tr").glob("*.md")}
+    names = {p.name for p in (APP / "prompts" / "tr").glob("*.md")}
     assert len(names) == 7 and "_contract.md" in names
     for lang in LANGUAGES:
-        assert {p.name for p in (ROOT / "prompts" / lang).glob("*.md")} == names
+        assert {p.name for p in (APP / "prompts" / lang).glob("*.md")} == names
 
 
 def test_registry_picks_the_prompt_folder_by_language():
@@ -26,7 +27,7 @@ def test_registry_picks_the_prompt_folder_by_language():
 
 def test_the_rules_are_the_same_in_both_languages():
     """English prompts keep the contract: JSON envelope, evidence quotes, 80-point bar, no fabrication."""
-    en = {n: c.system_prompt(ROOT, "en") for n, c in Registry().cards.items()}
+    en = {n: c.system_prompt(APP, "en") for n, c in Registry().cards.items()}
     assert all('{"message"' in p for p in en.values())
     assert "WORD FOR WORD" in en["cv_writer"] and '"claims"' in en["cv_writer"]
     assert '"approve" or "reject"' in en["verifier"] and "must be \"reject\"" in en["verifier"]

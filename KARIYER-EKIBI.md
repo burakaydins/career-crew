@@ -52,7 +52,7 @@ Kullanıcı bir **iş ilanı** ve kendi **CV'sini** verir. Altı uzman yapay zek
 
 > **Uygulama notu (M1):** Araçlar sütunu uygulanmadı. Girdiler (ilan, CV, önceki sürüm) prompta doğrudan eklenir. Ajanlar `{"message", "data", "files"}` biçiminde tek bir JSON döndürür. Dosyaları orchestrator yazar. Bu yüzden `claude-code` modunda ajanlara hiç araç verilmez (`--tools ""`), `allowedTools` boş listedir. Üç mod aynı biçimi kullanır.
 
-### Agent Card örneği (`agents/cv_writer.json`)
+### Agent Card örneği (`app/agents/cv_writer.json`)
 ```json
 {
   "name": "cv_writer",
@@ -203,7 +203,7 @@ CLI (M1)  /  Web arayüzü (M2)
         ▼
 Orchestrator ── workflow: Sequential · Parallel · Loop · Gate · UserGate
         │
-        ├── Registry ← agents/*.json (Agent Card'lar)
+        ├── Registry ← app/agents/*.json (Agent Card'lar)
         ├── Kod kontrolleri (checks/)
         └── Provider
               ├── MockProvider        (örnek konuşmalar)
@@ -220,8 +220,8 @@ career-crew/
 ├── LICENSE                 ← MIT
 ├── pyproject.toml
 ├── .gitignore              ← runs/, memory/, .env, kişisel dosyalar
-├── agents/                 ← 6 Agent Card
-├── prompts/tr/             ← Türkçe rol promptları (M2: prompts/en/)
+├── app/agents/                 ← 6 Agent Card
+├── app/prompts/tr/            ← Türkçe rol promptları (M2: prompts/en/)
 ├── app/
 │   ├── cli.py              ← terminal arayüzü
 │   ├── orchestrator.py

@@ -1,4 +1,4 @@
-"""Loads Agent Cards from agents/*.json and their prompt files."""
+"""Loads Agent Cards from app/agents/*.json and their prompt files (app/prompts/<lang>/)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# Agent cards and prompts live inside the package so a normal (non-editable) install ships them.
+ROOT = Path(__file__).resolve().parent
 LANGUAGES = ("tr", "en")
 DEFAULT_LANG = "tr"
 
@@ -41,6 +42,11 @@ class Registry:
         for path in sorted((root / "agents").glob("*.json")):
             card = AgentCard(**json.loads(path.read_text(encoding="utf-8")))
             self.cards[card.name] = card
+        if not self.cards or not (root / "prompts" / lang / "_contract.md").is_file():
+            raise FileNotFoundError(
+                f"Ajan kartları ya da promptlar bulunamadı ({root / 'agents'}, {root / 'prompts' / lang}). "
+                "Kurulum eksik: projeyi 'pip install -e .' ile ya da tam bir paketten kurun."
+            )
 
     def __getitem__(self, name: str) -> AgentCard:
         return self.cards[name]

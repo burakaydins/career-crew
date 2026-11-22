@@ -211,7 +211,7 @@ runs/2026-11-21_143000_ilan/
 | 💌 Mektup Yazarı | Ön yazı hazırlar | Sonnet |
 | 🎤 Mülakatçı | Mülakat soruları ve cevap ipuçları hazırlar | Haiku |
 
-Modeller `agents/*.json` dosyalarından, promptlar `prompts/tr/` ve `prompts/en/` altından değiştirilebiliyor. Ajanlara kısa konuşmaları söylendi: en fazla üç cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
+Modeller `app/agents/*.json` dosyalarından, promptlar `app/prompts/tr/` ve `app/prompts/en/` altından değiştirilebiliyor. Ajanlara kısa konuşmaları söylendi: en fazla üç cümle, önce karar sonra gerekçe, selamlama ve övgü yok.
 
 ### Akış
 
@@ -252,7 +252,7 @@ flowchart TB
     ORCH["Orchestrator<br/>app/orchestrator.py"]
     WF["Workflow<br/>Sequential · Parallel · Loop · UserGate<br/>app/workflow.py"]
     SKILLS["Skill'ler<br/>prompt + sonuç işleme<br/>app/skills.py"]
-    REG["Registry<br/>agents/*.json · prompts/tr · prompts/en"]
+    REG["Registry<br/>app/agents · app/prompts/tr · app/prompts/en"]
     CHECKS["Kod kontrolleri<br/>app/checks/"]
     REPORT["Rapor<br/>app/report.py"]
     RUN[("runs/…/<br/>inputs · work · output")]
@@ -305,8 +305,8 @@ Görev durumlarını A2A'dan aldım: `submitted → working → completed / reje
 | `app/memory.py` | Dersler: eleme kuralları, `memory/lessons.json`, prompt bölümü |
 | `app/persist.py` | `work/state.json`: durumu kaydetme ve geri yükleme |
 | `app/pdf.py` | Markdown alt kümesinden PDF, gömülü DejaVu Sans |
-| `agents/` | 6 Agent Card: model, efor, renk, prompt dosyası |
-| `prompts/tr/`, `prompts/en/` | Rol promptları ve ortak konuşma sözleşmesi, iki dilde |
+| `app/agents/` | 6 Agent Card: model, efor, renk, prompt dosyası |
+| `app/prompts/tr/`, `app/prompts/en/` | Rol promptları ve ortak konuşma sözleşmesi, iki dilde |
 
 ## Modlar
 
@@ -324,7 +324,7 @@ Görev durumlarını A2A'dan aldım: `submitted → working → completed / reje
 
 ## Diller
 
-`--dil tr|en` ya da web arayüzündeki dil seçimi, ajanların hangi dilde yazılmış prompt aldığını belirliyor. `registry.py` `prompts/tr/` ya da `prompts/en/` klasörünü seçiyor, kullanıcı prompt'undaki başlıklar da aynı dilde gidiyor. Kurallar iki dilde aynı: uydurma yasağı, kanıt alıntısı, JSON zarfı, 80 puan eşiği. Ajanların ürettiği CV, ön yazı ve mülakat notu promptun dilinden bağımsız olarak orijinal CV'nin dilinde yazılıyor, yani İngilizce promptla Türkçe bir CV'yi uyarlarsanız çıktı Türkçe kalıyor.
+`--dil tr|en` ya da web arayüzündeki dil seçimi, ajanların hangi dilde yazılmış prompt aldığını belirliyor. `registry.py` `app/prompts/tr/` ya da `app/prompts/en/` klasörünü seçiyor, kullanıcı prompt'undaki başlıklar da aynı dilde gidiyor. Kurallar iki dilde aynı: uydurma yasağı, kanıt alıntısı, JSON zarfı, 80 puan eşiği. Ajanların ürettiği CV, ön yazı ve mülakat notu promptun dilinden bağımsız olarak orijinal CV'nin dilinde yazılıyor, yani İngilizce promptla Türkçe bir CV'yi uyarlarsanız çıktı Türkçe kalıyor.
 
 İki sınır var. `mock` sağlayıcısı hazır bir Türkçe senaryo oynattığı için `--dil en` ile de Türkçe konuşuyor. Kod kontrollerinin hata mesajları (örneğin "Kanıt orijinal CV'de bulunamadı") ve rapor da şimdilik Türkçe, İngilizce çalıştırmada bu mesajlar yazara Türkçe gidiyor.
 
