@@ -243,3 +243,15 @@ def test_web_interview_rejects_bad_input_and_blocks_a_second_run(client, finishe
     assert first.status_code == 200
     assert client.post("/api/interviews", json={"dir": finished_run.name, "count": 2}).status_code == 409
     client.post(f"/api/runs/{first.json()['id']}/answer", json={"action": "finish"})
+
+
+def test_names_like_n_plus_one_are_not_numbers_and_the_question_is_the_message():
+    s = state()
+    s.turn["answer"] = "N+1 sorununu select_related ile çözerim. Python ile 3 yıl çalıştım."
+    apply_evaluate_answer(s, result())
+    assert s.turn["evaluation"]["code_flags"] == []
+    from app.skills import apply_ask_question
+    s.turn = {}
+    r = AgentResult(message="Görev tamam, dosya yok.", data={"question": "Docker biliyor musun?"})
+    apply_ask_question(s, r)
+    assert r.message == "Docker biliyor musun?" and s.turn["asked"] == "Docker biliyor musun?"

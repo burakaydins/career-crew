@@ -7,6 +7,7 @@ agent's envelope, writes the allowed files and updates run state.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -276,6 +277,7 @@ def apply_ask_question(s: RunState, r: AgentResult) -> None:
     if not question:
         raise ProviderError("Mülakatçı soru üretmedi")
     s.turn["asked"] = question
+    r.message = question  # what the terminal and the chat show: always the question, whatever else the model said
 
 
 def prompt_evaluate_answer(s: RunState) -> str:
@@ -291,7 +293,10 @@ def prompt_evaluate_answer(s: RunState) -> str:
 
 
 def apply_evaluate_answer(s: RunState, r: AgentResult) -> None:
-    from app.checks.numbers import numbers
+    from app.checks.numbers import numbers as _numbers
+
+    # "N+1", "S3": a digit glued to a letter or "+" is a name, not a figure the candidate claims.
+    numbers = lambda text: _numbers(re.sub(r"\b[A-Za-z]\s?\+\s?\d+", " ", text))
 
     verdict = r.data.get("verdict")
     if verdict not in VERDICTS:
