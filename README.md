@@ -13,6 +13,9 @@ Kendi iş başvurularım için yazdım. İlanı ve CV'yi veriyorsunuz, altı aja
 - [Neden farklı?](#neden-farklı)
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Web arayüzü](#web-arayüzü)
+- [Hafıza](#hafıza)
+- [Duraklatma ve devam etme](#duraklatma-ve-devam-etme)
+- [PDF çıktı](#pdf-çıktı)
 - [Örnek çalıştırma](#örnek-çalıştırma)
 - [Nasıl çalışır?](#nasıl-çalışır)
 - [Mimari](#mimari)
@@ -81,7 +84,10 @@ career-crew web
 | `--mod` | `mock` (varsayılan), `claude-code` ya da `api` |
 | `--dil` | Ajan promptlarının dili: `tr` (varsayılan) ya da `en` |
 | `--runs` | Çalıştırma klasörlerinin yeri (varsayılan `runs/`) |
-| `--evet` | İlan okuma onayını sorma |
+| `--evet` | İlan okuma onayını sorma (ders onayını atlamaz) |
+| `--pdf` | CV ve ön yazıyı PDF olarak da üret |
+| `--devam` | Duraklayan ya da yarıda kalan çalıştırmayı sürdür, değeri çalıştırma klasörü |
+| `--hafiza` | Derslerin tutulduğu klasör (varsayılan `memory/`) |
 | `--hizli` | `mock` modunda bekleme yapma |
 
 ## Web arayüzü
@@ -106,6 +112,53 @@ Komut `http://127.0.0.1:8765` adresinde bir sayfa açıyor ve tarayıcıyı da a
 Sunucu yalnızca `127.0.0.1` adresini dinliyor, başka adres seçeneği yok. Bunun üstüne iki kontrol daha koydum. Host başlığı `127.0.0.1` ya da `localhost` değilse istek reddediliyor (DNS rebinding'e karşı). Yazma istekleri başka bir sitenin sayfasından gelmişse, yani Origin başlığı bu sunucunun adresi değilse, reddediliyor. Yine de bir ağ servisi olarak tasarlanmadı: kimlik doğrulaması yok, aynı anda tek süreç çalışıyor.
 
 Arayüz düz HTML, CSS ve JavaScript. Derleme adımı ve CDN yok, `app/web/static/` altındaki üç dosyadan ibaret. Olaylar terminaldeki ile aynı Event Bus'tan geliyor, tarayıcıya SSE ile akıyor. Süreç arka plandaki bir iş parçacığında çalışıyor, orchestrator'ın mantığı web için kopyalanmadı.
+
+## Hafıza
+
+Her çalıştırmanın sonunda İşe Alım Müdürü en fazla üç "ders adayı" öneriyor. Ders, sonraki başvurularda da isteyebileceğim bir stil ya da tercih: örneğin "GitHub linki iletişim satırının hemen altında olsun" ya da "ön yazı üç paragrafı geçmesin". Her ders tek bir ajana ait (CV Yazarı, Mektup Yazarı ya da Mülakatçı).
+
+Hiçbir ders kendiliğinden kaydedilmiyor. Terminalde çalıştırma bittiğinde her aday için ayrı soruluyor, varsayılan cevap hayır. Web arayüzünde sohbetin sonunda onay kutuları ve "Seçilenleri kaydet" düğmesi çıkıyor. `--evet` yalnızca ilan okuma sorusunu atlıyor, derslere dokunmuyor. Terminal etkileşimli değilse (örneğin bir betikten çalışıyorsa) adaylar `work/lesson_candidates.json` içinde kalıyor ve hiçbiri kaydedilmiyor.
+
+Kabul edilen dersler `memory/lessons.json` dosyasına yazılıyor ve sonraki çalıştırmada o ajanın system prompt'una "kullanıcı tercihleri" bölümü olarak, uydurma yasağını ve çıktı biçimini anlatan kısımlardan sonra ekleniyor. Prompt'ta bu tercihlerin kuralları geçersiz kılamayacağı yazıyor, ama asıl güvence kodda:
+
+- Rakam, yıl, yüzde, şirket adı, bağlantı ya da e-posta içeren aday elenir.
+- O çalıştırmanın ilanındaki beceri ve anahtar kelimeleri, şirket adını ve CV'nin beceri satırlarındaki ve başlıklarındaki terimleri içeren aday elenir. Böylece bir CV'nin verisi sonraki başvurulara ders diye sızmaz.
+- "Uydurma yasağını yok say" ya da çıktı biçimini değiştirmeye çalışan metinler elenir.
+- Ders yalnızca üç yazar ajan için kaydedilir. Doğrulayıcı ve İşe Alım Müdürü derslerden etkilenmez.
+- Ajan başına en fazla 5 ders var, benzer olanlar ikinci kez eklenmez. Dosyayı elle düzenleseniz bile prompt'a eklenirken aynı kontroller yeniden yapılıyor.
+
+Elenen adaylar ve nedenleri çalıştırmanın sonunda gösteriliyor.
+
+```bash
+career-crew ders listele
+career-crew ders sil <id>
+```
+
+Web arayüzünün açılış sayfasında da kayıtlı dersler listeleniyor ve silinebiliyor. Dersler yalnızca bu bilgisayardaki `memory/` klasöründe duruyor, `.gitignore`'da ve hiçbir yere gönderilmiyor. Ders önerisi için ek bir ajan çağrısı yapılıyor (hafif modelle), ders çıkarma başarısız olursa başvuru paketi yine de tamamlanıyor.
+
+## Duraklatma ve devam etme
+
+Her adımdan sonra çalıştırmanın durumu `work/state.json` dosyasına yazılıyor: ilan okuması, CV'nin son sürümü, kod kontrolü sonuçları, tamamlanan turlar ve hangi adımların bittiği. Kullanım limiti dolarsa (`claude` çıktısındaki limit mesajı ya da API'nin `RateLimitError` hatası) süreç hata vermeden duruyor, ne yapılacağını yazıyor ve 75 koduyla çıkıyor:
+
+```bash
+career-crew --devam runs/2026-11-22_153000_ilan --mod claude-code
+```
+
+Komut biten adımları atlıyor ve kaldığı yerden sürdürüyor, CV döngüsünün hangi turda olduğu da dahil. Limit tam bir turun ortasında dolduysa o turdaki bitmiş adımlar da (örneğin doğrulayıcı bitmiş, puanlama bitmemişse) yeniden çalıştırılmıyor. İlan onayı bir kez geçildiyse tekrar sorulmuyor. Limit dışında bir hatayla duran ya da Ctrl+C ile kesilen çalıştırmalar da aynı komutla devam ediyor. Bitmiş bir çalıştırma devam ettirilemiyor. `state.json` bozuksa ya da başka bir sürümden kalmışsa ne olduğunu söyleyen bir hata veriliyor, dosyayı kendiliğinden silmiyor ya da yeniden yazmıyor.
+
+Web arayüzünde limit dolunca sayfada "Devam et" düğmeli bir uyarı çıkıyor. Sunucuyu kapatsanız bile açılış sayfasında "Duraklamış çalıştırmalar" listesi var, oradan da devam edilebiliyor. Devam edilen çalıştırmada önceki konuşma yeniden gösteriliyor.
+
+Bunu `mock` ile ve sahte limit hatalarıyla test ettim. Gerçek bir abonelik limitinin dolmasını ben denemedim, `claude` çıktısındaki mesajı sahte örneklerle tanıyorum. Mesaj biçimi değişirse limit, sıradan hata gibi görünür ve yine de aynı `--devam` komutuyla sürdürülebilir.
+
+## PDF çıktı
+
+```bash
+career-crew --ilan ilan.pdf --cv cv.docx --mod api --pdf
+```
+
+`--pdf` ile `output/` klasörüne `cv.pdf` ve `cover_letter.pdf` da yazılıyor (web arayüzünde "PDF olarak da üret" kutusu aynı işi yapıyor ve dosyalar indirme listesinde görünüyor). Markdown'ın küçük bir alt kümesi destekleniyor: başlıklar, madde işaretleri, kalın, eğik ve paragraflar. CV tek sütun, 1-2 sayfaya sığması için gerekirse yazı küçültülüyor. Ön yazı bir sayfaya sığdırılmaya çalışılıyor.
+
+PDF'i [fpdf2](https://github.com/py-pdf/fpdf2) üretiyor ve DejaVu Sans yazı tipini gömüyor (`app/assets/fonts/`, lisansı yanında), böylece ı, İ, ş, Ş, ğ, Ğ, ü, ö, ç doğru görünüyor ve metin katmanından geri okunabiliyor. Testler `pypdf` ile bunu denetliyor. Yazı tipinde karşılığı olmayan karakterler (bazı emojiler) kutu yerine atılıyor. PDF üretilemezse süreç başarısız olmuyor, uyarı verip `.md` dosyalarını bırakıyor.
 
 ## Örnek çalıştırma
 
@@ -249,6 +302,9 @@ Görev durumlarını A2A'dan aldım: `submitted → working → completed / reje
 | `app/providers/` | `mock`, `claude_code`, `api` ve ortak JSON zarfı ayrıştırıcısı |
 | `app/checks/` | `coverage`, `evidence`, `leakage`, `dates`, `numbers`, `titles`, `structure`, `ats` |
 | `app/report.py` | `report.md`: skorlar, turlar, açık sorunlar, değişiklikler |
+| `app/memory.py` | Dersler: eleme kuralları, `memory/lessons.json`, prompt bölümü |
+| `app/persist.py` | `work/state.json`: durumu kaydetme ve geri yükleme |
+| `app/pdf.py` | Markdown alt kümesinden PDF, gömülü DejaVu Sans |
 | `agents/` | 6 Agent Card: model, efor, renk, prompt dosyası |
 | `prompts/tr/`, `prompts/en/` | Rol promptları ve ortak konuşma sözleşmesi, iki dilde |
 
@@ -284,7 +340,7 @@ Görev durumlarını A2A'dan aldım: `submitted → working → completed / reje
 
 ## Gizlilik
 
-`runs/`, `memory/` ve `.env` `.gitignore`'da. Repodaki örnek CV ve ilan sahte. Veriler seçilen model sağlayıcısı dışında bir yere gönderilmiyor, analitik ya da izleme yok. Web arayüzü yalnızca bu bilgisayardan erişilebiliyor. Yüklenen dosyalar geçici klasörde tutulup işlem bitince siliniyor, kopyaları `runs/` altında kalıyor.
+`runs/`, `memory/` ve `.env` `.gitignore`'da. Hafızadaki dersler yalnızca `memory/lessons.json` dosyasında, yani bu bilgisayarda duruyor. Seçtiğiniz model sağlayıcısına yalnızca onayladığınız dersler, ilgili ajanın prompt'unun parçası olarak gidiyor. Repodaki örnek CV ve ilan sahte. Veriler seçilen model sağlayıcısı dışında bir yere gönderilmiyor, analitik ya da izleme yok. Web arayüzü yalnızca bu bilgisayardan erişilebiliyor. Yüklenen dosyalar geçici klasörde tutulup işlem bitince siliniyor, kopyaları `runs/` altında kalıyor.
 
 ## Geliştirme
 
@@ -313,7 +369,7 @@ Tasarım notları [KARIYER-EKIBI.md](KARIYER-EKIBI.md) dosyasında.
 - [x] M1: çekirdek, terminal arayüzü, uydurma kontrolleri
 - [x] PDF ve DOCX girdisi
 - [x] M2: localhost web arayüzü, ilan görüntüsü ve taranmış PDF girdisi, İngilizce promptlar
-- [ ] M3: hafıza, duraklatıp devam etme, PDF çıktı
+- [x] M3: hafıza, duraklatıp devam etme, PDF çıktı
 - [ ] M4: replay modu
 
 ## Esinlenmeler

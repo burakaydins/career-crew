@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+import json
 import shutil
+import threading
 from pathlib import Path
 from typing import Callable
 
+from app import persist
 from app import report as report_mod
 from app.checks import run_all
 from app.events import EventBus, JsonlSink
-from app.providers.base import AgentRequest, Provider, ProviderError
+from app.memory import LessonStore, MemoryError_, screen
+from app.providers.base import AgentRequest, Provider, ProviderError, RateLimited
 from app.registry import Registry
 from app.skills import SKILLS, RunState
 from app.tasks import DataPart, Message, Task, TaskState, TextPart
@@ -25,6 +29,14 @@ AskFn = Callable[[str, RunState], "str | None"]
 
 class RunFailed(RuntimeError):
     pass
+
+
+class RunPaused(RuntimeError):
+    """The usage limit is reached. The run state is saved and `--devam` continues it."""
+
+    def __init__(self, message: str, run_dir: Path) -> None:
+        super().__init__(message)
+        self.run_dir = run_dir
 
 
 def slugify(text: str) -> str:
@@ -119,7 +131,19 @@ def plateau(s: RunState) -> bool:
     return prev["clean"] and last["clean"] and last["score"] <= prev["score"]
 
 
-def career_flow() -> Sequential:
+def make_pdfs(ctx: "Orchestrator") -> None:
+    """PDF is a convenience: a failure here must not fail a run whose package is complete."""
+    from app import pdf
+
+    try:
+        made = pdf.render_outputs(ctx.state.output)
+    except Exception as e:
+        ctx.bus.publish("warning", "code", text=f"PDF üretilemedi: {e}")
+        return
+    ctx.bus.publish("pdf", "code", files=made)
+
+
+def career_flow(with_pdf: bool = False) -> Sequential:
     return Sequential(
         Step("job_analyst", "analyze_job"),
         UserGate("confirm_job", retry=Step("job_analyst", "analyze_job")),
@@ -136,6 +160,7 @@ def career_flow() -> Sequential:
         Step("letter_writer", "write_letter"),
         Step("interviewer", "prepare_interview"),
         CodeStep("report", write_report),
+        *([CodeStep("pdf", make_pdfs)] if with_pdf else []),
     )
 
 
@@ -149,14 +174,62 @@ class Orchestrator:
         ask: AskFn,
         bus: EventBus | None = None,
         registry: Registry | None = None,
+        memory: LessonStore | None = None,
+        pdf: bool = False,
+        resume: tuple[RunState, list[str]] | None = None,
     ) -> None:
         self.provider = provider
         self.registry = registry or Registry()
         self.bus = bus or EventBus()
         self.bus.subscribe(JsonlSink(run_dir / "events.jsonl"))
         self.ask = ask
-        self.state = RunState(job_text=job_text, cv_text=cv_text, run_dir=run_dir, lang=self.registry.lang)
+        self.memory = memory
+        self.pdf = pdf
+        self.resumed = resume is not None
+        if resume:
+            self.state, self.completed = resume
+        else:
+            self.state = RunState(job_text=job_text, cv_text=cv_text, run_dir=run_dir, lang=self.registry.lang)
+            self.completed: list[str] = []
         self.tasks: list[Task] = []
+        self.scope = 0  # loop round for checkpoint keys, never restored
+        self._lock = threading.RLock()
+
+    @classmethod
+    def resume(cls, run_dir: Path, provider: Provider, ask: AskFn, bus: EventBus | None = None,
+               memory: LessonStore | None = None, pdf: bool = False) -> "Orchestrator":
+        """Rebuilds a run from work/state.json. Raises persist.StateError when it cannot."""
+        data = persist.read(run_dir)
+        if data.get("status") == "done":
+            raise persist.StateError("Bu çalıştırma zaten bitmiş, devam ettirilecek bir şey yok.")
+        state, completed = persist.restore(run_dir, data)
+        registry = Registry(lang=state.lang)
+        return cls(provider, run_dir, state.job_text, state.cv_text, ask, bus, registry, memory, pdf, (state, completed))
+
+    # ---- checkpoints (used by workflow nodes) ----
+    def is_done(self, key: str) -> bool:
+        return key in self.completed
+
+    def mark(self, key: str) -> None:
+        with self._lock:
+            if key not in self.completed:
+                self.completed.append(key)
+            self.save("running")
+
+    def forget(self, key: str) -> None:
+        with self._lock:
+            if key in self.completed:
+                self.completed.remove(key)
+
+    def save(self, status: str, note: str = "") -> None:
+        with self._lock:
+            persist.save(self.state.run_dir, persist.dump(self.state, self.completed, status, self.provider.name, note))
+
+    def _system_prompt(self, card) -> str:
+        prompt = card.system_prompt(self.registry.root, self.registry.lang)
+        # Preferences come after the contract that holds the no-fabrication rules.
+        section = self.memory.prompt_section(card.name, self.registry.lang) if self.memory else ""
+        return f"{prompt}\n{section}\n" if section else prompt
 
     def run_agent(self, agent: str, skill: str) -> None:
         card = self.registry[agent]
@@ -168,7 +241,7 @@ class Orchestrator:
         request = AgentRequest(
             card=card,
             skill=skill,
-            system_prompt=card.system_prompt(self.registry.root, self.registry.lang),
+            system_prompt=self._system_prompt(card),
             user_prompt=build_prompt(self.state),
             workdir=self.state.run_dir,
             iteration=max(1, self.state.iteration),
@@ -176,6 +249,12 @@ class Orchestrator:
         try:
             result = self.provider.run(request)
             apply(self.state, result)
+        except RateLimited as e:
+            task.state = TaskState.INPUT_REQUIRED
+            reason = str(e)
+            self.bus.publish("run_paused", agent, skill=skill, task=task.id, reason=reason, run_dir=str(self.state.run_dir))
+            self.save("paused", reason)
+            raise RunPaused(f"{card.displayName}: {reason}", self.state.run_dir) from e
         except Exception as e:
             error = str(e) if isinstance(e, ProviderError) else f"beklenmeyen hata ({type(e).__name__}: {e})"
             task.state, task.error = TaskState.FAILED, error
@@ -189,17 +268,47 @@ class Orchestrator:
         if skill == "verify" and self.state.verdict.get("overridden"):
             self.bus.publish("warning", "code", text="Doğrulayıcı onay verdi ama kod hataları var: karar 'ret' olarak değiştirildi.")
 
-    def run(self) -> RunState:
-        self.bus.publish("run_started", provider=self.provider.name, run_dir=str(self.state.run_dir))
+    def extract_lessons(self) -> None:
+        """Best effort: lesson candidates are a bonus, the finished package must not depend on them."""
+        if not self.memory or self.is_done("lessons"):
+            return
+        st = self.state
         try:
-            career_flow().run(self)
+            st.saved_lessons = [l.text for l in self.memory.all()]
+            self.run_agent("recruiter", "extract_lessons")
+            accepted, rejected = screen(st.lesson_candidates, st.job, st.cv_text, self.memory)
+        except (RunFailed, RunPaused, MemoryError_) as e:
+            self.bus.publish("warning", "code", text=f"Ders adayları çıkarılamadı: {e}")
+            return
+        st.lesson_candidates, st.lesson_rejected = accepted, rejected
+        (st.work / "lesson_candidates.json").write_text(
+            json.dumps({"accepted": accepted, "rejected": rejected}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self.bus.publish("lessons_proposed", "code", candidates=accepted, rejected=rejected)
+        self.mark("lessons")
+
+    def run(self) -> RunState:
+        if self.resumed:
+            self.bus.publish("run_resumed", provider=self.provider.name, run_dir=str(self.state.run_dir),
+                             skipped=len(self.completed))
+        else:
+            self.bus.publish("run_started", provider=self.provider.name, run_dir=str(self.state.run_dir))
+        self.save("running")
+        try:
+            career_flow(self.pdf).run(self)
+        except RunPaused as e:
+            self.save("paused", str(e))  # a sibling step may have saved "running" after the pause
+            raise
         except RunFailed as e:
+            self.save("failed", str(e))
             self.bus.publish("run_failed", error=str(e))
             raise
         except Exception as e:  # a code step (checks, report) crashed
             error = f"beklenmeyen hata ({type(e).__name__}: {e})"
+            self.save("failed", error)
             self.bus.publish("run_failed", error=error)
             raise RunFailed(error) from e
+        self.extract_lessons()
+        self.save("done")
         self.bus.publish("run_finished", converged=self.state.converged, score=self.state.score,
                          output=str(self.state.output))
         return self.state

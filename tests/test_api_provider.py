@@ -136,3 +136,12 @@ def test_transcribe_maps_api_errors(provider):
     provider.install(anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=req), body=None))
     with pytest.raises(ProviderError, match="API anahtarı"):
         provider.transcribe("image/png", b"x", "cv")
+
+
+def test_rate_limit_is_told_apart_from_other_errors(provider):
+    from app.providers.base import RateLimited
+
+    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    provider.install(anthropic.RateLimitError("slow down", response=httpx.Response(429, request=req), body=None))
+    with pytest.raises(RateLimited):
+        provider.run(request("recruiter"))

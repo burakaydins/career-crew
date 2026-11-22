@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "Burak Aydın" }]
-dependencies = ["rich>=13", "pypdf>=5", "python-docx>=1.1", "fastapi>=0.110", "uvicorn>=0.30", "python-multipart>=0.0.9"]
+dependencies = ["rich>=13", "pypdf>=5", "python-docx>=1.1", "fastapi>=0.110", "uvicorn>=0.30", "python-multipart>=0.0.9", "fpdf2>=2.8"]
 
 [project.optional-dependencies]
 api = ["anthropic>=0.70"]
@@ -23,6 +23,7 @@ career-crew = "app.cli:main"
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app" = ["assets/fonts/*"]
 "app.web" = ["static/*"]
 
 [tool.pytest.ini_options]

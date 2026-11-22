@@ -10,9 +10,9 @@ from conftest import ROOT
 
 def test_cli_mock_end_to_end(tmp_path):
     code = main(["--ilan", str(ROOT / "examples/ilan.md"), "--cv", str(ROOT / "examples/cv.md"),
-                 "--evet", "--hizli", "--runs", str(tmp_path)])
+                 "--evet", "--hizli", "--runs", str(tmp_path / "runs"), "--hafiza", str(tmp_path / "mem")])
     assert code == 0
-    (run,) = tmp_path.iterdir()
+    (run,) = (tmp_path / "runs").iterdir()
     for f in ("cv.md", "cover_letter.md", "interview.md", "report.md"):
         assert (run / "output" / f).read_text(encoding="utf-8").strip()
     assert (run / "inputs" / "cv.md").exists() and (run / "work" / "job.json").exists()

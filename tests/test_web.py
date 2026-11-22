@@ -223,9 +223,11 @@ def test_web_subcommand_starts_the_server(monkeypatch, tmp_path):
 
     calls = []
     monkeypatch.setattr("app.web.server.serve", lambda *a, **k: calls.append((a, k)))
-    assert cli.main(["web", "--port", "9001", "--dil", "en", "--hizli", "--acma", "--runs", str(tmp_path)]) == 0
+    assert cli.main(["web", "--port", "9001", "--dil", "en", "--hizli", "--acma", "--runs", str(tmp_path),
+                     "--hafiza", str(tmp_path / "mem")]) == 0
     (args, kwargs), = calls
-    assert args[1:] == (tmp_path, "mock", "en", 9001) and kwargs == {"open_browser": False}
+    assert args[1:] == (tmp_path, "mock", "en", 9001)
+    assert kwargs == {"open_browser": False, "memory_dir": tmp_path / "mem"}
 
 
 def test_web_subcommand_reports_a_busy_port(monkeypatch, capsys):
@@ -253,3 +255,105 @@ def test_cli_image_input_with_mock_exits_with_a_message(tmp_path, capsys):
     Image.new("RGB", (30, 30), "white").save(img)
     code = cli.main(["--ilan", str(img), "--cv", str(ROOT / "examples/cv.md"), "--evet", "--hizli", "--runs", str(tmp_path / "r")])
     assert code == 2 and "mock modu görsel okuyamaz" in capsys.readouterr().out
+
+
+# ---- memory, pause and PDF ---------------------------------------------------------------
+
+@pytest.fixture
+def mem_client(tmp_path):
+    app = server.create_app(MockProvider(), tmp_path / "runs", memory_dir=tmp_path / "mem")
+    return TestClient(app, base_url=BASE)
+
+
+def test_lessons_need_a_click_and_are_saved_only_when_chosen(mem_client, tmp_path):
+    run_id = start(mem_client).json()["id"]
+    wait(mem_client, run_id, lambda i: i["finished"])
+    got = mem_client.get(f"/api/runs/{run_id}/lessons").json()
+    assert len(got["accepted"]) == 2 and len(got["rejected"]) == 1 and not got["answered"]
+    assert mem_client.get("/api/lessons").json() == []  # nothing saved by finishing the run
+    r = mem_client.post(f"/api/runs/{run_id}/lessons", json={"accept": [0]}, headers={"Origin": BASE})
+    assert r.status_code == 200 and len(r.json()["saved"]) == 1
+    saved = mem_client.get("/api/lessons").json()
+    assert len(saved) == 1 and saved[0]["agent"] == "cv_writer"
+    assert mem_client.post(f"/api/runs/{run_id}/lessons", json={"accept": [1]}).status_code == 409
+    assert mem_client.delete(f"/api/lessons/{saved[0]['id']}").status_code == 200
+    assert mem_client.get("/api/lessons").json() == []
+    assert mem_client.delete("/api/lessons/yok").status_code == 404
+
+
+def test_lesson_answer_validation(mem_client):
+    run_id = start(mem_client).json()["id"]
+    wait(mem_client, run_id, lambda i: i["finished"])
+    assert mem_client.post(f"/api/runs/{run_id}/lessons", json={"accept": [9]}).status_code == 400
+    assert mem_client.post(f"/api/runs/{run_id}/lessons", json={"accept": "all"}).status_code == 400
+    assert mem_client.post(f"/api/runs/{run_id}/lessons", content=b"x").status_code == 400
+
+
+def test_cross_origin_cannot_save_lessons(mem_client):
+    run_id = start(mem_client).json()["id"]
+    wait(mem_client, run_id, lambda i: i["finished"])
+    r = mem_client.post(f"/api/runs/{run_id}/lessons", json={"accept": [0]}, headers={"Origin": "http://evil.example"})
+    assert r.status_code == 403 and mem_client.get("/api/lessons").json() == []
+
+
+def test_memory_off_by_default(client):
+    assert client.get("/api/config").json()["memory"] is False
+    assert client.get("/api/lessons").status_code == 404
+
+
+def test_pdf_option_adds_downloads(client):
+    run_id = start(client, pdf="1").json()["id"]
+    wait(client, run_id, lambda i: i["finished"])
+    names = {f["name"] for f in client.get(f"/api/runs/{run_id}/files").json()}
+    assert {"cv.pdf", "cover_letter.pdf"} <= names
+    r = client.get(f"/api/runs/{run_id}/files/output/cv.pdf?download=1")
+    assert r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
+    run_id = start(client).json()["id"]
+    wait(client, run_id, lambda i: i["finished"])
+    assert "cv.pdf" not in {f["name"] for f in client.get(f"/api/runs/{run_id}/files").json()}
+
+
+class LimitOnce(MockProvider):
+    def __init__(self):
+        super().__init__()
+        self.hit = False
+
+    def run(self, request):
+        from app.providers.base import RateLimited
+        if request.skill == "score" and request.iteration == 2 and not self.hit:
+            self.hit = True
+            raise RateLimited("limit")
+        return super().run(request)
+
+
+def test_paused_run_can_be_resumed_from_the_browser(tmp_path):
+    client = TestClient(server.create_app(LimitOnce(), tmp_path / "runs"), base_url=BASE)
+    run_id = start(client).json()["id"]
+    info = wait(client, run_id, lambda i: i["finished"])
+    assert info["status"] == "paused"
+    evs, _ = events(client, run_id)
+    assert any(e["type"] == "run_paused" for e in evs)
+    (paused,) = client.get("/api/paused").json()
+    r = client.post("/api/resume", json={"dir": paused["dir"]}, headers={"Origin": BASE})
+    assert r.status_code == 200
+    new_id = r.json()["id"]
+    info = wait(client, new_id, lambda i: i["finished"])
+    assert info["status"] == "done"
+    evs, _ = events(client, new_id)
+    types = [e["type"] for e in evs]
+    assert "run_paused" in types and "run_resumed" in types and types[-1] == "run_finished"  # earlier conversation is replayed
+    assert [e["id"] for e in evs] == list(range(len(evs)))
+    assert client.get("/api/paused").json() == []
+    assert "Deniz" in client.get(f"/api/runs/{new_id}/cv/original").text
+
+
+def test_resume_rejects_bad_names_and_damaged_state(client, tmp_path):
+    assert client.post("/api/resume", json={"dir": "../etc"}).status_code == 400
+    assert client.post("/api/resume", json={"dir": "yok"}).status_code == 404
+    assert client.post("/api/resume", json={}).status_code == 400
+    bad = tmp_path / "runs" / "bozuk" / "work"
+    bad.mkdir(parents=True)
+    (bad / "state.json").write_text("{x", encoding="utf-8")
+    r = client.post("/api/resume", json={"dir": "bozuk"})
+    assert r.status_code == 400 and "bozuk" in r.json()["detail"]
+    assert client.get("/api/paused").json() == []

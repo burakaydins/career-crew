@@ -35,6 +35,9 @@ class RunState:
     feedback: dict[str, str] = field(default_factory=dict)
     usage: list[dict] = field(default_factory=list)
     lang: str = "tr"
+    lesson_candidates: list[dict] = field(default_factory=list)
+    lesson_rejected: list[dict] = field(default_factory=list)
+    saved_lessons: list[str] = field(default_factory=list)  # not persisted
 
     @property
     def work(self) -> Path:
@@ -55,6 +58,7 @@ TAGS_EN = {
     "orijinal_cv": "original_cv", "ilan_ozeti": "job_summary", "onceki_cv": "previous_cv",
     "geri_bildirim": "feedback", "yeni_cv": "new_cv", "kod_kontrolleri": "code_checks",
     "cv": "cv", "cvde_olmayan_ilan_terimleri": "posting_terms_missing_from_cv",
+    "kullanici_duzeltmesi": "user_correction", "turlar": "rounds", "kayitli_dersler": "saved_lessons",
 }
 
 
@@ -217,6 +221,33 @@ def apply_prepare_interview(s: RunState, r: AgentResult) -> None:
     (s.output / "interview.md").write_text(_require_file(r, "interview.md"), encoding="utf-8")
 
 
+# ---- extract_lessons ----------------------------------------------------------
+
+def prompt_extract_lessons(s: RunState) -> str:
+    existing = s.saved_lessons
+    rounds = [
+        {"round": r["iteration"], "code_errors": [i.message for i in r["checks"].errors] if r["checks"] else [],
+         "verifier_issues": r["verdict"].get("issues", []), "hiring_gaps": r["missing"]}
+        for r in s.rounds
+    ]
+    return "\n\n".join([
+        _t(s, "Görev: extract_lessons. Bu çalıştırmadan en fazla 3 stil ya da tercih dersi çıkar.",
+           "Task: extract_lessons. Extract at most 3 style or preference lessons from this run."),
+        _block(s, "kullanici_duzeltmesi", s.feedback.get("confirm_job", "-")),
+        _block(s, "turlar", _json(rounds)),
+        _block(s, "kayitli_dersler", "\n".join(f"- {x}" for x in (existing or [])) or _t(s, "yok", "none")),
+    ])
+
+
+def apply_extract_lessons(s: RunState, r: AgentResult) -> None:
+    raw = r.data.get("lessons")
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise ProviderError("'lessons' bir liste olmalı")
+    s.lesson_candidates = [c for c in raw if isinstance(c, dict)]
+
+
 SKILLS: dict[str, tuple[Callable[[RunState], str], Callable[[RunState, AgentResult], None]]] = {
     "analyze_job": (prompt_analyze_job, apply_analyze_job),
     "tailor_cv": (prompt_tailor_cv, apply_tailor_cv),
@@ -224,4 +255,5 @@ SKILLS: dict[str, tuple[Callable[[RunState], str], Callable[[RunState, AgentResu
     "score": (prompt_score, apply_score),
     "write_letter": (prompt_write_letter, apply_write_letter),
     "prepare_interview": (prompt_prepare_interview, apply_prepare_interview),
+    "extract_lessons": (prompt_extract_lessons, apply_extract_lessons),
 }

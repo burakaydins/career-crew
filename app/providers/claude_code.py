@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.providers.base import (
-    TRANSCRIBE_SYSTEM, AgentRequest, AgentResult, ProviderError, parse_envelope, transcribe_prompt,
+    TRANSCRIBE_SYSTEM, AgentRequest, AgentResult, ProviderError, RateLimited, looks_like_limit, parse_envelope,
+    transcribe_prompt,
 )
 
 TIMEOUT_SECONDS = 600
@@ -92,8 +93,12 @@ class ClaudeCodeProvider:
                 final = event
 
         if final is None:
+            if looks_like_limit(proc.stderr + proc.stdout):
+                raise RateLimited("claude kullanım limiti doldu")
             raise ProviderError(f"claude hata verdi (kod {proc.returncode}): {proc.stderr.strip()[:500]}")
         if final.get("is_error"):
+            if looks_like_limit(str(final.get("result"))):
+                raise RateLimited(f"claude kullanım limiti doldu: {str(final.get('result'))[:200]}")
             raise ProviderError(f"claude hata verdi: {str(final.get('result'))[:500]}")
         return final
 

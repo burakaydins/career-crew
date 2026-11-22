@@ -306,7 +306,7 @@ Detaylar: [PROJECT.md](PROJECT.md) → 5.3.
 ### M2: Web arayüzü
 FastAPI + SSE, canlı konuşma ekranı, dosya yükleme (PDF/fotoğraf), önce/sonra karşılaştırması, İngilizce prompt seçeneği.
 
-### M3: Hafıza ve dayanıklılık
+### M3: Hafıza ve dayanıklılık ✅
 Ders sistemi, limit dolunca duraklat/devam et, PDF çıktı.
 
 ### M4: Vitrin

@@ -20,6 +20,11 @@
   <section id="start" class="start">
     <h1>İlana göre CV uyarla, uydurma yapmadan</h1>
     <p class="lead">İlanı ve CV'ni ver. Altı ajan çalışır, sen konuşmayı canlı izlersin. Veriler yalnızca bu bilgisayarda ve seçili model sağlayıcısında kalır.</p>
+    <section id="paused" class="card" hidden>
+      <h2>Duraklamış çalıştırmalar</h2>
+      <p class="hint">Kullanım limiti dolunca duran süreçler. Limit yenilendiyse kaldığı yerden devam eder.</p>
+      <ul id="paused-list" class="files"></ul>
+    </section>
     <form id="form" novalidate>
       <div class="drops">
         <div class="drop-card" data-kind="ilan">
@@ -55,12 +60,18 @@
           </select>
         </label>
         <label class="check"><input type="checkbox" id="auto-yes"> İlan okumasını sorma, otomatik onayla</label>
+        <label class="check"><input type="checkbox" id="pdf"> CV ve ön yazıyı PDF olarak da üret</label>
         <p id="mock-note" class="hint" hidden>mock modu hazır senaryoyu oynatır, ajanlar her zaman Türkçe konuşur.</p>
       </div>
       <p id="form-error" class="error" role="alert" hidden></p>
       <button id="go" class="primary" type="submit">Başlat</button>
       <p class="hint">Görsel ve taranmış PDF'ler model tarafından okunur (mock modunda okunamaz). Yapay zekâ çıktıları hatalı olabilir, göndermeden önce kendin kontrol et.</p>
     </form>
+    <section id="lessons-box" class="card" hidden>
+      <h2>Kayıtlı dersler</h2>
+      <p class="hint">Onayladığın tercihler, sonraki çalıştırmalarda ilgili ajana eklenir. Yalnızca bu bilgisayarda saklanır.</p>
+      <ul id="lesson-list" class="files"></ul>
+    </section>
   </section>
 
   <section id="run" class="run" hidden>

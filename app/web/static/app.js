@@ -17,7 +17,8 @@ let originalCv = "";
 let latestCv = "";
 
 const ACCEPTED = [".md", ".txt", ".pdf", ".docx", ".png", ".jpg", ".jpeg"];
-const BADGES = { pending: "bekliyor", working: "çalışıyor", done: "tamam", waiting: "onay bekliyor", rejected: "ret", failed: "hata", issue: "sorun var" };
+const AGENT_LABEL = { cv_writer: "CV Yazarı", letter_writer: "Mektup Yazarı", interviewer: "Mülakatçı" };
+const BADGES = { paused: "duraklatıldı", pending: "bekliyor", working: "çalışıyor", done: "tamam", waiting: "onay bekliyor", rejected: "ret", failed: "hata", issue: "sorun var" };
 
 // ---- theme -----------------------------------------------------------------
 function applyTheme(t) {
@@ -90,6 +91,7 @@ $("#form").addEventListener("submit", async (e) => {
   }
   fd.append("lang", $("#lang").value);
   fd.append("auto_yes", $("#auto-yes").checked ? "1" : "0");
+  fd.append("pdf", $("#pdf").checked ? "1" : "0");
   const btn = $("#go");
   btn.disabled = true;
   try {
@@ -278,13 +280,17 @@ async function loadFiles() {
   ul.replaceChildren();
   for (const f of files) {
     const li = el("li");
-    const view = el("button", "", f.name);
-    view.type = "button";
-    view.addEventListener("click", async () => {
-      const text = await getText(`/files/${f.folder}/${f.name}`);
-      const pre = el("pre", "doc"); pre.textContent = text || "";
-      openViewer(f.name, pre);
-    });
+    const isPdf = f.name.endsWith(".pdf");
+    const view = isPdf ? el("a", "", f.name) : el("button", "", f.name);
+    if (isPdf) { view.href = `/api/runs/${runId}/files/${f.folder}/${f.name}`; view.target = "_blank"; view.rel = "noopener"; }
+    else {
+      view.type = "button";
+      view.addEventListener("click", async () => {
+        const text = await getText(`/files/${f.folder}/${f.name}`);
+        const pre = el("pre", "doc"); pre.textContent = text || "";
+        openViewer(f.name, pre);
+      });
+    }
     const dl = el("a", "", "indir");
     dl.href = `/api/runs/${runId}/files/${f.folder}/${f.name}?download=1`;
     dl.setAttribute("download", f.name);
@@ -306,12 +312,105 @@ async function finish(data) {
     if (a) setAts("after", a[1]);
   }
   await loadFiles();
+  showLessons();
   const banner = $("#banner");
   banner.className = "banner ok";
   banner.textContent = data && data.converged
     ? "Bitti. CV hedefe ulaştı. Yapay zekâ çıktıları hatalı olabilir, göndermeden önce kendin kontrol et."
     : "Bitti, ama CV hedefe ulaşmadı. En iyi sürüm kullanıldı, raporu oku ve göndermeden önce kendin kontrol et.";
   banner.hidden = false;
+}
+
+// ---- lessons (memory) --------------------------------------------------------
+async function showLessons() {
+  if (!config.memory) return;
+  const res = await fetch(`/api/runs/${runId}/lessons`);
+  if (!res.ok) return;
+  const data = await res.json();
+  if (data.answered || (!data.accepted.length && !data.rejected.length)) return;
+  const g = el("div", "gate");
+  g.append(el("h3", "", "Hafıza: bu dersler kaydedilsin mi?"));
+  g.append(el("p", "hint", "Kaydedilenler sonraki çalıştırmalarda ilgili ajana eklenir. Hiçbiri sen onaylamadan kaydedilmez."));
+  const boxes = [];
+  data.accepted.forEach((c, i) => {
+    const label = el("label", "check");
+    const cb = el("input"); cb.type = "checkbox"; cb.dataset.i = i;
+    boxes.push(cb);
+    label.append(cb, document.createTextNode(` ${AGENT_LABEL[c.agent] || c.agent}: ${c.text}`));
+    g.append(label);
+  });
+  data.rejected.forEach((c) => g.append(el("p", "hint", `Elendi (${c.reason}): ${c.text}`)));
+  const msg = el("p", "hint"); msg.hidden = true;
+  if (data.accepted.length) {
+    const actions = el("div", "actions");
+    const save = el("button", "primary", "Seçilenleri kaydet");
+    const skip = el("button", "secondary", "Hiçbirini kaydetme");
+    const send = async (accept) => {
+      save.disabled = skip.disabled = true;
+      const r = await fetch(`/api/runs/${runId}/lessons`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accept }) });
+      const body = await r.json().catch(() => ({}));
+      msg.hidden = false;
+      msg.textContent = r.ok ? `${body.saved.length} ders kaydedildi.` + body.failed.map((f) => ` Kaydedilemedi (${f.reason}).`).join("") : (body.detail || "Hata");
+      if (r.ok) actions.hidden = true; else save.disabled = skip.disabled = false;
+    };
+    save.addEventListener("click", () => send(boxes.filter((b) => b.checked).map((b) => Number(b.dataset.i))));
+    skip.addEventListener("click", () => send([]));
+    actions.append(save, skip);
+    g.append(actions);
+  }
+  g.append(msg);
+  chat.append(g);
+  scrollChat();
+}
+
+async function loadLessonList() {
+  if (!config.memory) return;
+  const res = await fetch("/api/lessons");
+  if (!res.ok) return;
+  const list = await res.json();
+  $("#lessons-box").hidden = !list.length;
+  const ul = $("#lesson-list");
+  ul.replaceChildren();
+  for (const l of list) {
+    const li = el("li");
+    li.append(el("span", "", `${AGENT_LABEL[l.agent] || l.agent}: ${l.text}`));
+    const del = el("button", "", "sil");
+    del.type = "button";
+    del.addEventListener("click", async () => { await fetch(`/api/lessons/${l.id}`, { method: "DELETE" }); loadLessonList(); });
+    li.append(del);
+    ul.append(li);
+  }
+}
+
+async function loadPaused() {
+  const res = await fetch("/api/paused");
+  if (!res.ok) return;
+  const list = await res.json();
+  $("#paused").hidden = !list.length;
+  const ul = $("#paused-list");
+  ul.replaceChildren();
+  for (const p of list) {
+    const li = el("li");
+    li.append(el("span", "", p.title ? `${p.title} (${p.dir})` : p.dir));
+    const b = el("button", "", "devam et");
+    b.type = "button";
+    b.addEventListener("click", () => resumeRun(p.dir, b));
+    li.append(b);
+    ul.append(li);
+  }
+}
+
+async function resumeRun(dir, button) {
+  if (button) button.disabled = true;
+  try {
+    const res = await fetch("/api/resume", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dir, pdf: $("#pdf").checked }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `Sunucu hatası (${res.status})`);
+    startRun(body.id);
+  } catch (err) {
+    if (button) button.disabled = false;
+    showError(err.message);
+  }
 }
 
 // ---- event handling --------------------------------------------------------
@@ -375,6 +474,21 @@ function handle(ev) {
       else if (d.stopped_early) divider("Puan artmadı, döngü erken durdu");
       break;
     case "warning": bubble("code", d.text, "warn"); break;
+    case "run_paused": {
+      Object.keys(workingBubbles).forEach(clearWorking);
+      const banner = $("#banner");
+      banner.className = "banner";
+      banner.replaceChildren(document.createTextNode("Limit doldu, süreç duraklatıldı. Durum kaydedildi, limit yenilenince kaldığı yerden devam edebilirsin. "));
+      const b = el("button", "primary", "Devam et");
+      b.type = "button";
+      b.addEventListener("click", () => resumeRun(d.run_dir.split("/").pop(), b));
+      banner.append(b);
+      banner.hidden = false;
+      $("#new-run").hidden = false;
+      STEPS.forEach((s) => { if ($("#step-" + s.id).dataset.s === "working") setStep(s.id, "paused"); });
+      break;
+    }
+    case "run_resumed": $("#banner").hidden = true; $("#new-run").hidden = true; break;
     case "task_failed": {
       clearWorking(ev.agent);
       bubble(ev.agent, "hata: " + d.error, "err");
@@ -451,4 +565,6 @@ $("#new-run").addEventListener("click", () => { history.replaceState(null, "", l
     if (res.ok) startRun(m[1]);
     else history.replaceState(null, "", location.pathname);
   }
+  loadPaused();
+  loadLessonList();
 })();

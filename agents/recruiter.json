@@ -3,7 +3,8 @@
   "displayName": "👔 İşe Alım Müdürü",
   "description": "İşveren gözüyle 0-100 puan verir, en kritik 3 eksiği söyler",
   "skills": [
-    "score"
+    "score",
+    "extract_lessons"
   ],
   "model": "haiku",
   "effort": "low",

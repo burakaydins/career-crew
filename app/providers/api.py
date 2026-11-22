@@ -8,7 +8,7 @@ from pathlib import Path
 import base64
 
 from app.providers.base import (
-    TRANSCRIBE_SYSTEM, AgentRequest, AgentResult, ProviderError, parse_envelope, transcribe_prompt,
+    TRANSCRIBE_SYSTEM, AgentRequest, AgentResult, ProviderError, RateLimited, parse_envelope, transcribe_prompt,
 )
 
 MODELS = {
@@ -51,7 +51,7 @@ class ApiProvider:
         except a.AuthenticationError as e:
             raise ProviderError("API anahtarı geçersiz ya da eksik (ANTHROPIC_API_KEY)") from e
         except a.RateLimitError as e:
-            raise ProviderError("API hız limiti aşıldı, biraz sonra tekrar deneyin") from e
+            raise RateLimited("API hız limiti aşıldı") from e
         except a.APIStatusError as e:
             raise ProviderError(f"API hatası {e.status_code}: {e.message}") from e
         except a.APIConnectionError as e:

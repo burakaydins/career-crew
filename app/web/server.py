@@ -27,7 +27,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.events import Event, EventBus
 from app.inputs import MAX_BYTES, InputError, check_upload, read_input
-from app.orchestrator import Orchestrator, RunFailed, create_run_dir
+from app import persist
+from app.memory import LessonStore, MemoryError_
+from app.orchestrator import Orchestrator, RunFailed, RunPaused, create_run_dir
 from app.registry import DEFAULT_LANG, LANGUAGES, Registry
 
 HOST = "127.0.0.1"
@@ -38,6 +40,7 @@ MAX_TEXT_CHARS = 200_000
 MAX_CORRECTION_CHARS = 2_000
 RUN_ID = re.compile(r"^[0-9a-f]{12}$")
 FILE_NAME = re.compile(r"^[\w.\-]+$")
+RUN_DIR_NAME = re.compile(r"^[\w.\-]+$")
 FILE_FOLDERS = ("output", "work", "inputs")
 
 
@@ -83,6 +86,7 @@ class WebRun:
         self.gate_open = False
         self.gate_answer: str | None = None
         self.gate_ready = threading.Event()
+        self.lessons_answered = False
 
     def collect(self, event: Event) -> None:
         with self.lock:
@@ -93,6 +97,10 @@ class WebRun:
                 self.status = "failed"
             elif event.type == "run_finished":
                 self.status = "done"
+            elif event.type == "run_paused":
+                self.status = "paused"
+            elif event.type == "run_resumed":
+                self.status = "running"
             elif event.type == "input_required":
                 self.status = "waiting"
             elif event.type == "gate_passed" or event.type == "run_started":
@@ -100,25 +108,26 @@ class WebRun:
 
 
 class RunManager:
-    def __init__(self, runs_dir: Path, provider) -> None:
+    def __init__(self, runs_dir: Path, provider, memory: LessonStore | None = None) -> None:
         self.runs_dir = runs_dir
         self.provider = provider
+        self.memory = memory
         self.runs: dict[str, WebRun] = {}
         self.lock = threading.Lock()
 
     def active(self) -> WebRun | None:
         return next((r for r in self.runs.values() if not r.finished), None)
 
-    def start(self, tmp: Path, files: dict[str, Path], lang: str, auto_yes: bool) -> WebRun:
+    def start(self, tmp: Path, files: dict[str, Path], lang: str, auto_yes: bool, pdf: bool = False) -> WebRun:
         with self.lock:
             if self.active():
                 raise HTTPException(409, "Zaten çalışan bir süreç var, bitmesini bekleyin")
             run = WebRun(uuid.uuid4().hex[:12])
             self.runs[run.id] = run
-        threading.Thread(target=self._work, args=(run, tmp, files, lang, auto_yes), daemon=True).start()
+        threading.Thread(target=self._work, args=(run, tmp, files, lang, auto_yes, pdf), daemon=True).start()
         return run
 
-    def _work(self, run: WebRun, tmp: Path, files: dict[str, Path], lang: str, auto_yes: bool) -> None:
+    def _work(self, run: WebRun, tmp: Path, files: dict[str, Path], lang: str, auto_yes: bool, pdf: bool = False) -> None:
         bus = EventBus()
         bus.subscribe(run.collect)
         try:
@@ -136,16 +145,71 @@ class RunManager:
             orch = Orchestrator(
                 provider=self.provider, run_dir=run_dir, job_text=texts["ilan"], cv_text=texts["cv"],
                 ask=self._make_ask(run, bus, auto_yes), bus=bus, registry=registry,
+                memory=self.memory, pdf=pdf,
             )
             orch.run()
         except InputError as e:
             bus.publish("run_failed", None, error=str(e))
-        except RunFailed:
-            pass  # the orchestrator already published run_failed
+        except (RunFailed, RunPaused):
+            pass  # the orchestrator already published run_failed / run_paused
         except Exception as e:  # keep the stream from hanging on a bug
             bus.publish("run_failed", None, error=f"beklenmeyen hata ({type(e).__name__}: {e})")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+            with run.lock:
+                run.finished = True
+
+    def paused(self) -> list[dict]:
+        out = []
+        if self.runs_dir.is_dir():
+            for d in sorted(self.runs_dir.iterdir(), reverse=True):
+                try:
+                    data = persist.read(d)
+                except persist.StateError:
+                    continue
+                if data.get("status") == "paused":
+                    out.append({"dir": d.name, "title": data["state"].get("job", {}).get("title", ""), "note": data.get("note", "")})
+        return out
+
+    def resume(self, name: str, pdf: bool = False) -> WebRun:
+        if not RUN_DIR_NAME.match(name) or name in (".", ".."):
+            raise HTTPException(400, "Geçersiz klasör adı")
+        run_dir = self.runs_dir / name
+        if not run_dir.is_dir():
+            raise HTTPException(404, "Çalıştırma klasörü bulunamadı")
+        bus = EventBus()
+        run = WebRun(uuid.uuid4().hex[:12])
+        bus.subscribe(run.collect)
+        try:
+            orch = Orchestrator.resume(run_dir, self.provider, self._make_ask(run, bus, False), bus, memory=self.memory, pdf=pdf)
+        except persist.StateError as e:
+            raise HTTPException(400, str(e)) from e
+        # Show the earlier conversation again, then continue it.
+        log = run_dir / "events.jsonl"
+        if log.is_file():
+            for line in log.read_text(encoding="utf-8").splitlines():
+                try:
+                    ev = json.loads(line)
+                except ValueError:
+                    continue
+                ev["id"] = len(run.events)
+                run.events.append(ev)
+        run.run_dir, run.cv_text, run.job = run_dir, orch.state.cv_text, orch.state.job
+        with self.lock:
+            if self.active():
+                raise HTTPException(409, "Zaten çalışan bir süreç var, bitmesini bekleyin")
+            self.runs[run.id] = run
+        threading.Thread(target=self._work_resume, args=(run, orch, bus), daemon=True).start()
+        return run
+
+    def _work_resume(self, run: WebRun, orch: Orchestrator, bus: EventBus) -> None:
+        try:
+            orch.run()
+        except (RunFailed, RunPaused):
+            pass
+        except Exception as e:
+            bus.publish("run_failed", None, error=f"beklenmeyen hata ({type(e).__name__}: {e})")
+        finally:
             with run.lock:
                 run.finished = True
 
@@ -167,8 +231,10 @@ class RunManager:
         return ask
 
 
-def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang: str = DEFAULT_LANG) -> FastAPI:
-    manager = RunManager(runs_dir, provider)
+def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang: str = DEFAULT_LANG,
+               memory_dir: Path | None = None) -> FastAPI:
+    memory = LessonStore(memory_dir) if memory_dir else None
+    manager = RunManager(runs_dir, provider, memory)
     registry = Registry()
     app = FastAPI(title="career-crew", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(LocalOnly)
@@ -192,6 +258,7 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
             "lang": lang,
             "languages": list(LANGUAGES),
             "max_mb": MAX_BYTES // 1024 // 1024,
+            "memory": memory is not None,
             "agents": {n: {"name": c.displayName, "color": c.color, "description": c.description} for n, c in registry.cards.items()},
         }
 
@@ -223,7 +290,7 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
                 else:
                     raise HTTPException(400, f"{'İlan' if kind == 'ilan' else 'CV'} eksik: dosya yükleyin ya da metin yapıştırın")
                 files[kind] = path
-            run = manager.start(tmp, files, run_lang, str(form.get("auto_yes")) == "1")
+            run = manager.start(tmp, files, run_lang, str(form.get("auto_yes")) == "1", str(form.get("pdf")) == "1")
         except BaseException:
             shutil.rmtree(tmp, ignore_errors=True)
             raise
@@ -286,6 +353,82 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
         run.gate_ready.set()
         return {"ok": True}
 
+    @app.get("/api/paused")
+    def paused():
+        return manager.paused()
+
+    @app.post("/api/resume")
+    async def resume(request: Request):
+        try:
+            body = await request.json()
+        except ValueError:
+            raise HTTPException(400, "Geçersiz istek")
+        name = body.get("dir") if isinstance(body, dict) else None
+        if not isinstance(name, str):
+            raise HTTPException(400, "dir gerekli")
+        return {"id": manager.resume(name, bool(body.get("pdf"))).id}
+
+    def need_memory() -> LessonStore:
+        if memory is None:
+            raise HTTPException(404, "Hafıza kapalı")
+        return memory
+
+    @app.get("/api/lessons")
+    def lessons():
+        try:
+            return [l.__dict__ for l in need_memory().all()]
+        except MemoryError_ as e:
+            raise HTTPException(500, str(e))
+
+    @app.delete("/api/lessons/{lesson_id}")
+    def delete_lesson(lesson_id: str):
+        try:
+            if not need_memory().delete(lesson_id):
+                raise HTTPException(404, "Böyle bir ders yok")
+        except MemoryError_ as e:
+            raise HTTPException(500, str(e))
+        return {"ok": True}
+
+    def candidates(run: WebRun) -> dict:
+        path = run.run_dir / "work" / "lesson_candidates.json" if run.run_dir else None
+        if path is None or not path.is_file():
+            return {"accepted": [], "rejected": []}
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    @app.get("/api/runs/{run_id}/lessons")
+    def run_lessons(run_id: str):
+        run = get_run(run_id)
+        need_memory()
+        return {**candidates(run), "answered": run.lessons_answered}
+
+    @app.post("/api/runs/{run_id}/lessons")
+    async def answer_lessons(run_id: str, request: Request):
+        """Nothing is saved unless the browser sends the indices the user clicked."""
+        run = get_run(run_id)
+        store = need_memory()
+        try:
+            body = await request.json()
+        except ValueError:
+            raise HTTPException(400, "Geçersiz istek")
+        accept = body.get("accept") if isinstance(body, dict) else None
+        if not isinstance(accept, list) or not all(isinstance(i, int) for i in accept):
+            raise HTTPException(400, "accept bir sayı listesi olmalı")
+        if run.lessons_answered:
+            raise HTTPException(409, "Bu çalıştırmanın dersleri zaten yanıtlandı")
+        cands = candidates(run)["accepted"]
+        saved, failed = [], []
+        for i in dict.fromkeys(accept):
+            if not 0 <= i < len(cands):
+                raise HTTPException(400, "Geçersiz ders numarası")
+            try:
+                saved.append(store.add(cands[i]["agent"], cands[i]["text"]).__dict__)
+            except ValueError as e:
+                failed.append({"text": cands[i]["text"], "reason": str(e)})
+            except MemoryError_ as e:
+                raise HTTPException(500, str(e))
+        run.lessons_answered = True
+        return {"saved": saved, "failed": failed}
+
     @app.get("/api/runs/{run_id}/cv/original")
     def original_cv(run_id: str):
         return PlainTextResponse(get_run(run_id).cv_text)
@@ -310,7 +453,8 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
         path = (run.run_dir / folder / name).resolve()
         if path.parent != (run.run_dir / folder).resolve() or not path.is_file():
             raise HTTPException(404, "Dosya bulunamadı")
-        media = "text/plain; charset=utf-8" if path.suffix in (".md", ".txt", ".json", ".jsonl") else "application/octet-stream"
+        media = ("text/plain; charset=utf-8" if path.suffix in (".md", ".txt", ".json", ".jsonl")
+                 else "application/pdf" if path.suffix == ".pdf" else "application/octet-stream")
         headers = {"Content-Disposition": f'attachment; filename="{name}"'} if download else {}
         return FileResponse(path, media_type=media, headers=headers)
 
@@ -318,7 +462,8 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
     return app
 
 
-def serve(provider, runs_dir: Path, mode: str, lang: str, port: int, open_browser: bool = True) -> None:
+def serve(provider, runs_dir: Path, mode: str, lang: str, port: int, open_browser: bool = True,
+          memory_dir: Path | None = None) -> None:
     import socket
 
     import uvicorn
@@ -326,7 +471,7 @@ def serve(provider, runs_dir: Path, mode: str, lang: str, port: int, open_browse
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         if probe.connect_ex((HOST, port)) == 0:
             raise OSError(f"{HOST}:{port} kullanımda. Başka bir port deneyin: career-crew web --port {port + 1}")
-    app = create_app(provider, runs_dir, mode, lang)
+    app = create_app(provider, runs_dir, mode, lang, memory_dir)
     url = f"http://{HOST}:{port}"
     print(f"career-crew web ({mode} modu, yalnızca bu bilgisayardan erişilir): {url}")
     print("Durdurmak için Ctrl+C.")

@@ -204,6 +204,14 @@ SCRIPT: dict[str, list[dict]] = {
         "message": "8 soru hazır → output/interview.md. Docker için dürüst cevap önerildi.",
         "files": {"interview.md": INTERVIEW},
     }],
+    "extract_lessons": [{
+        "message": "3 ders adayı çıkardım.",
+        "data": {"lessons": [
+            {"agent": "cv_writer", "text": "Kullanıcı yazılım ilanlarına başvuruyor: GitHub linki iletişim bilgilerinin hemen altında olsun."},
+            {"agent": "letter_writer", "text": "Ön yazı üç kısa paragrafı geçmesin."},
+            {"agent": "cv_writer", "text": "Özette Django deneyimini öne çıkar."},
+        ]},
+    }],
 }
 
 

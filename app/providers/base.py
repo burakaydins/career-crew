@@ -39,6 +39,18 @@ class ProviderError(RuntimeError):
     pass
 
 
+class RateLimited(ProviderError):
+    """The usage limit or rate limit is reached. The run can be resumed later."""
+
+
+_LIMIT = re.compile(
+    r"usage limit|rate.?limit|limit reached|hit your .{0,40}limit|out of (extra )?usage|too many requests|quota", re.I)
+
+
+def looks_like_limit(text: str) -> bool:
+    return bool(_LIMIT.search(text or ""))
+
+
 class Provider(Protocol):
     name: str
 
