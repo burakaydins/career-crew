@@ -45,6 +45,8 @@ def skills_items(cv: str) -> list[str]:
             inside = SKILLS_HEADING.match("## " + normalize(line.lstrip("#"))) is not None
             continue
         if inside and line.strip():
+            line = re.sub(r"[*_`]", "", line)  # **bold** markers
+            line = re.sub(r"^\s*[-•]?\s*[^:,;|]{1,40}:\s+", "", line)  # "- Networking: URLSession, ..." keeps the skills only
             items += [x.strip(" -*.") for x in re.split(r"[,;|•]", line)]
     return [x for x in items if x]
 

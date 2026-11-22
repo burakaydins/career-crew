@@ -123,3 +123,13 @@ def test_decimal_years():
     assert dates.years_claims("3,5 yıllık") == [3.5]
     assert len(dates.check("3.5 yıllık", "5 yıllık")) == 1
     assert dates.check("3,5 yıllık", "3,5 yıllık") == []
+
+
+def test_grouped_and_bold_skill_lines_do_not_trigger_new_term_warnings():
+    original = "iOS developer\n## SKILLS\nSwift (Intermediate)\nURLSession, REST APIs, JSON\nXcode, Git, GitHub\n"
+    new = ("## Skills\n\n- **iOS Development:** Swift (Intermediate), UIKit\n- **Networking:** URLSession, REST APIs, JSON\n"
+           "- **Tools & Process:** Xcode, Git, GitHub\n")
+    job = {"required_skills": ["Swift"]}
+    warned = [i.message for i in leakage.check_new_terms(original, new, job)]
+    assert warned == ["'UIKit' orijinal CV'de geçmiyor. Gerçekten varsa orijinal CV'ye ekleyin."]  # only the real new term
+    assert leakage.skills_items(new) == ["Swift (Intermediate)", "UIKit", "URLSession", "REST APIs", "JSON", "Xcode", "Git", "GitHub"]
