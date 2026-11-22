@@ -27,7 +27,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.events import Event, EventBus
 from app.inputs import MAX_BYTES, InputError, check_upload, read_input
-from app import persist
+from app import persist, replay as replay_mod
 from app.memory import LessonStore, MemoryError_
 from app.orchestrator import Orchestrator, RunFailed, RunPaused, create_run_dir
 from app.registry import DEFAULT_LANG, LANGUAGES, Registry
@@ -87,6 +87,7 @@ class WebRun:
         self.gate_answer: str | None = None
         self.gate_ready = threading.Event()
         self.lessons_answered = False
+        self.replay = False
 
     def collect(self, event: Event) -> None:
         with self.lock:
@@ -116,7 +117,7 @@ class RunManager:
         self.lock = threading.Lock()
 
     def active(self) -> WebRun | None:
-        return next((r for r in self.runs.values() if not r.finished), None)
+        return next((r for r in self.runs.values() if not r.finished and not r.replay), None)
 
     def start(self, tmp: Path, files: dict[str, Path], lang: str, auto_yes: bool, pdf: bool = False) -> WebRun:
         with self.lock:
@@ -156,6 +157,58 @@ class RunManager:
             bus.publish("run_failed", None, error=f"beklenmeyen hata ({type(e).__name__}: {e})")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+            with run.lock:
+                run.finished = True
+
+    def history(self, limit: int = 50) -> list[dict]:
+        """Past runs that can be replayed (they have an events.jsonl)."""
+        out = []
+        if self.runs_dir.is_dir():
+            for d in sorted(self.runs_dir.iterdir(), reverse=True):
+                if not (d / "events.jsonl").is_file() or not RUN_DIR_NAME.match(d.name):
+                    continue
+                try:
+                    data = persist.read(d)
+                    title, status = data["state"].get("job", {}).get("title", ""), data.get("status", "")
+                except persist.StateError:
+                    title, status = "", ""
+                out.append({"dir": d.name, "title": title, "status": status,
+                            "interview": (d / "output" / "interview.md").is_file() or status == "done"})
+                if len(out) >= limit:
+                    break
+        return out
+
+    def start_replay(self, name: str, speed: float, instant: bool, upto: int | None) -> WebRun:
+        if not RUN_DIR_NAME.match(name) or name in (".", ".."):
+            raise HTTPException(400, "Geçersiz klasör adı")
+        run_dir = self.runs_dir / name
+        try:
+            events = replay_mod.load_events(run_dir)
+        except replay_mod.ReplayError as e:
+            raise HTTPException(404 if not run_dir.is_dir() else 400, str(e)) from e
+        if upto is not None:
+            events, instant = events[:max(0, upto)], True
+        for e in events:
+            if e.type == "job_review":
+                e.data["auto"] = True  # the gate was answered long ago, nothing to click
+        run = WebRun(uuid.uuid4().hex[:12])
+        run.replay, run.run_dir = True, run_dir
+        try:
+            state = persist.read(run_dir)["state"]
+            run.cv_text, run.job = state.get("cv_text", ""), state.get("job", {})
+        except persist.StateError:
+            cv = next(iter(sorted((run_dir / "inputs").glob("cv.*"))), None) if (run_dir / "inputs").is_dir() else None
+            run.cv_text = cv.read_text(encoding="utf-8", errors="replace") if cv and cv.suffix in (".md", ".txt") else ""
+        with self.lock:
+            self.runs[run.id] = run
+        threading.Thread(target=self._play, args=(run, events, speed, instant), daemon=True).start()
+        return run
+
+    def _play(self, run: WebRun, events: list[Event], speed: float, instant: bool) -> None:
+        try:
+            for _ in replay_mod.play(events, run.collect, speed, instant):
+                pass
+        finally:
             with run.lock:
                 run.finished = True
 
@@ -352,6 +405,29 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
         run.gate_open = False
         run.gate_ready.set()
         return {"ok": True}
+
+    @app.get("/api/history")
+    def history():
+        return manager.history()
+
+    @app.post("/api/replay")
+    async def replay_run(request: Request):
+        try:
+            body = await request.json()
+        except ValueError:
+            raise HTTPException(400, "Geçersiz istek")
+        if not isinstance(body, dict) or not isinstance(body.get("dir"), str):
+            raise HTTPException(400, "dir gerekli")
+        try:
+            speed = float(1.0 if body.get("speed") is None else body["speed"])
+        except (TypeError, ValueError):
+            raise HTTPException(400, "speed bir sayı olmalı")
+        upto = body.get("upto")
+        if upto is not None and (not isinstance(upto, int) or isinstance(upto, bool) or upto < 0):
+            raise HTTPException(400, "upto bir tam sayı olmalı")
+        if not 0.1 <= speed <= 50:
+            raise HTTPException(400, "speed 0.1 ile 50 arasında olmalı")
+        return {"id": manager.start_replay(body["dir"], speed, bool(body.get("instant")), upto).id}
 
     @app.get("/api/paused")
     def paused():

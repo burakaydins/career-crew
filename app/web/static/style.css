@@ -138,3 +138,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
   #viewer-body .compare { grid-template-columns: 1fr; }
   h1 { font-size: 1.3rem; }
 }
+
+label.inline { display: inline-flex; gap: .5rem; align-items: center; font-size: .88rem; margin-bottom: .6rem; }
+#history-list li span { flex: 1; }
+#history-list li button + button { margin-left: .75rem; }

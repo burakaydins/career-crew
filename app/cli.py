@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
+from app import replay
 from app.events import Event, EventBus
 from app.inputs import ACCEPTED, InputError, read_input
 from app.memory import DEFAULT_DIR, LessonStore, MemoryError_
@@ -55,6 +56,10 @@ class Renderer:
         card = self.registry.cards.get(agent or "")
         return f"[bold {card.color}]{card.displayName}[/]" if card else str(agent)
 
+    def plain_name(self, agent: str | None) -> str:
+        card = self.registry.cards.get(agent or "")
+        return card.displayName if card else str(agent)
+
     def __call__(self, e: Event) -> None:
         d = e.data
         match e.type:
@@ -73,7 +78,7 @@ class Renderer:
             case "loop_iteration":
                 console.rule(f"[dim]CV turu {d['iteration']}/{d['max']}[/]", style="dim")
             case "task_started":
-                console.print(f"[dim]… {self.registry[e.agent].displayName} {STATUS.get(d['skill'], 'çalışıyor')}[/]")
+                console.print(f"[dim]… {self.plain_name(e.agent)} {STATUS.get(d['skill'], 'çalışıyor')}[/]")
             case "agent_message":
                 console.print(f"{self.name(e.agent)}: {d['text']}")
             case "checks":
@@ -94,7 +99,8 @@ class Renderer:
             case "run_finished":
                 console.rule("[bold green]Bitti[/]")
                 console.print(f"📦 Çıktılar: {d['output']}")
-                for f in sorted(p.name for p in Path(d["output"]).iterdir()):
+                out = Path(d["output"])
+                for f in sorted(p.name for p in out.iterdir()) if out.is_dir() else []:
                     console.print(f"   • {f}")
                 console.print("[dim]Yapay zekâ çıktıları hatalı olabilir. Başvurmadan önce her şeyi kendiniz kontrol edin.[/]")
 
@@ -223,8 +229,33 @@ def lessons_main(argv: list[str]) -> int:
         return 2
 
 
+def replay_main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(prog="career-crew replay", description="Bitmiş bir çalıştırmayı terminalde yeniden oynat.")
+    p.add_argument("klasor", type=Path, metavar="KLASÖR", help="Çalıştırma klasörü (runs/...)")
+    p.add_argument("--hiz", type=float, default=1.0, help="Hız çarpanı, örn. 2 iki kat hızlı (varsayılan: 1)")
+    p.add_argument("--aninda", action="store_true", help="Beklemeden hepsini hemen göster")
+    args = p.parse_args(argv)
+    if args.hiz <= 0:
+        console.print("[red]--hiz sıfırdan büyük olmalı[/]")
+        return 2
+    try:
+        events = replay.load_events(args.klasor)
+        renderer = Renderer(Registry(lang=replay.run_language(args.klasor)))
+        for _ in replay.play(events, renderer, args.hiz, args.aninda):
+            pass
+    except (replay.ReplayError, FileNotFoundError) as e:
+        console.print(f"[red]{e}[/]")
+        return 2
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Oynatma durduruldu.[/]")
+        return 130
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "replay":
+        return replay_main(argv[1:])
     if argv and argv[0] == "web":
         return web_main(argv[1:])
     if argv and argv[0] == "ders":

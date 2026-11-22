@@ -400,6 +400,45 @@ async function loadPaused() {
   }
 }
 
+async function loadHistory() {
+  const res = await fetch("/api/history");
+  if (!res.ok) return;
+  const list = await res.json();
+  $("#history").hidden = !list.length;
+  const ul = $("#history-list");
+  ul.replaceChildren();
+  for (const h of list) {
+    const li = el("li");
+    li.append(el("span", "", h.title ? `${h.title} (${h.dir})` : h.dir));
+    const b = el("button", "", "yeniden oynat");
+    b.type = "button";
+    b.addEventListener("click", () => replayRun(h.dir, b));
+    li.append(b);
+    if (h.interview) {
+      const m = el("button", "", "mülakat yap");
+      m.type = "button";
+      m.addEventListener("click", () => startInterview(h.dir, m));
+      li.append(m);
+    }
+    ul.append(li);
+  }
+}
+
+async function replayRun(dir, button, opts) {
+  if (button) button.disabled = true;
+  const speed = $("#replay-speed").value;
+  const payload = { dir, speed: speed === "instant" ? 1 : Number(speed), instant: speed === "instant", ...(opts || {}) };
+  try {
+    const res = await fetch("/api/replay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `Sunucu hatası (${res.status})`);
+    startRun(body.id, true);
+  } catch (err) {
+    if (button) button.disabled = false;
+    showError(err.message);
+  }
+}
+
 async function resumeRun(dir, button) {
   if (button) button.disabled = true;
   try {
@@ -527,13 +566,14 @@ function connect() {
   source.addEventListener("end", () => source.close());
 }
 
-function startRun(id) {
+function startRun(id, replaying) {
   runId = id;
   lastEventId = -1; iteration = 0; originalCv = ""; latestCv = "";
-  history.replaceState(null, "", "#run=" + id);
+  history.replaceState(null, "", replaying ? location.pathname + location.search : "#run=" + id);
   $("#start").hidden = true;
   $("#run").hidden = false;
   $("#banner").hidden = true;
+  $("#replay-note").hidden = !replaying;
   $("#new-run").hidden = true;
   $("#rounds").replaceChildren();
   $("#score-val").textContent = "–";
@@ -559,6 +599,14 @@ $("#new-run").addEventListener("click", () => { history.replaceState(null, "", l
   $("#lang").value = config.lang;
   document.querySelectorAll(".max-mb").forEach((n) => (n.textContent = config.max_mb));
   $("#mock-note").hidden = config.mode !== "mock";
+  const q = new URLSearchParams(location.search);
+  if (q.get("replay")) {
+    // ?replay=KLASÖR&adim=N plays the first N events at once (used to capture frames for the README).
+    const adim = q.get("adim");
+    $("#replay-speed").value = q.get("hiz") || "1";
+    await replayRun(q.get("replay"), null, adim !== null ? { upto: Number(adim) } : {});
+    return;
+  }
   const m = location.hash.match(/^#run=([0-9a-f]{12})$/);
   if (m) {
     const res = await fetch(`/api/runs/${m[1]}`);
@@ -566,5 +614,6 @@ $("#new-run").addEventListener("click", () => { history.replaceState(null, "", l
     else history.replaceState(null, "", location.pathname);
   }
   loadPaused();
+  loadHistory();
   loadLessonList();
 })();

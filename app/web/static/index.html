@@ -67,6 +67,19 @@
       <button id="go" class="primary" type="submit">Başlat</button>
       <p class="hint">Görsel ve taranmış PDF'ler model tarafından okunur (mock modunda okunamaz). Yapay zekâ çıktıları hatalı olabilir, göndermeden önce kendin kontrol et.</p>
     </form>
+    <section id="history" class="card" hidden>
+      <h2>Geçmiş çalıştırmalar</h2>
+      <p class="hint">Kayıtlı bir süreci aynı arayüzde yeniden oynat, ya da o başvurunun CV'sine göre deneme mülakatı yap.</p>
+      <label class="inline">Hız
+        <select id="replay-speed">
+          <option value="1">1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+          <option value="instant">anında</option>
+        </select>
+      </label>
+      <ul id="history-list" class="files"></ul>
+    </section>
     <section id="lessons-box" class="card" hidden>
       <h2>Kayıtlı dersler</h2>
       <p class="hint">Onayladığın tercihler, sonraki çalıştırmalarda ilgili ajana eklenir. Yalnızca bu bilgisayarda saklanır.</p>
@@ -76,6 +89,7 @@
 
   <section id="run" class="run" hidden>
     <div id="banner" class="banner" role="alert" hidden></div>
+    <p id="replay-note" class="hint" hidden>Kayıttan yeniden oynatılıyor, model çağrılmıyor.</p>
     <div class="cols">
       <aside class="col steps-col" aria-label="Süreç adımları">
         <h2>Süreç</h2>
