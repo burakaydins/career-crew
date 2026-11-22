@@ -1,7 +1,7 @@
 # Kariyer Ekibi: Çok Ajanlı İş Başvurusu Asistanı
 
 > Repo adı: **`career-crew`**.
-> Bu doküman, genel tasarımın ([PROJECT.md](PROJECT.md)) kariyer ekibine odaklanan ve onaylanan kararları bir araya getiren sürümüdür.
+> Bu doküman career-crew'un tasarım notlarıdır: kariyer ekibine odaklanan ve onaylanan kararlar.
 
 ---
 
@@ -263,7 +263,6 @@ Solda süreç adımları ve durum rozetleri, ortada canlı konuşma, sağda dosy
 Her çalıştırmanın sonunda en fazla 3 ders adayı çıkarılır, kullanıcı onaylarsa kaydedilir ve sonraki çalıştırmada ilgili ajanın promptuna eklenir. Örnek:
 > **CV Yazarı:** "Kullanıcı yazılım ilanlarına başvuruyor: GitHub linki iletişim bilgilerinin hemen altında olsun."
 
-Detaylar: [PROJECT.md](PROJECT.md) → 5.3.
 
 ---
 
