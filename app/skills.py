@@ -38,6 +38,7 @@ class RunState:
     lesson_candidates: list[dict] = field(default_factory=list)
     lesson_rejected: list[dict] = field(default_factory=list)
     saved_lessons: list[str] = field(default_factory=list)  # not persisted
+    turn: dict = field(default_factory=dict)  # current mock-interview turn, not persisted
 
     @property
     def work(self) -> Path:
@@ -59,6 +60,8 @@ TAGS_EN = {
     "geri_bildirim": "feedback", "yeni_cv": "new_cv", "kod_kontrolleri": "code_checks",
     "cv": "cv", "cvde_olmayan_ilan_terimleri": "posting_terms_missing_from_cv",
     "kullanici_duzeltmesi": "user_correction", "turlar": "rounds", "kayitli_dersler": "saved_lessons",
+    "hazirlanan_soru": "prepared_question", "onceki_cevap": "previous_exchange", "soru": "question",
+    "cevap_ipucu": "answer_hint", "aday_cevabi": "candidate_answer",
 }
 
 
@@ -248,6 +251,71 @@ def apply_extract_lessons(s: RunState, r: AgentResult) -> None:
     s.lesson_candidates = [c for c in raw if isinstance(c, dict)]
 
 
+# ---- mock interview ------------------------------------------------------------
+
+VERDICTS = ("strong", "ok", "weak")
+NO_NEW_NUMBERS = ("Öneri CV'de olmayan bir rakam içerdiği için gösterilmedi. Konuyu CV'deki gerçek deneyimle anlat.",
+                  "The suggestion was withheld because it contains a number that is not in the CV. Tell it with the real experience from the CV.")
+
+
+def prompt_ask_question(s: RunState) -> str:
+    q = s.turn["prepared"]
+    block = q["text"] + (f"\n{q['hint']}" if q.get("hint") else "")
+    parts = [
+        _t(s, "Görev: ask_question. Sıradaki deneme mülakatı sorusunu adaya sor.", "Task: ask_question. Ask the candidate the next mock-interview question."),
+        _block(s, "ilan_ozeti", _json(s.job)),
+        _block(s, "hazirlanan_soru", block),
+    ]
+    if prev := s.turn.get("previous"):
+        parts.append(_block(s, "onceki_cevap", f"{prev['question']}\n{prev['answer'][:600]}\n{prev['verdict']}"))
+    return "\n\n".join(parts)
+
+
+def apply_ask_question(s: RunState, r: AgentResult) -> None:
+    question = str(r.data.get("question") or r.message).strip()
+    if not question:
+        raise ProviderError("Mülakatçı soru üretmedi")
+    s.turn["asked"] = question
+
+
+def prompt_evaluate_answer(s: RunState) -> str:
+    t = s.turn
+    return "\n\n".join([
+        _t(s, "Görev: evaluate_answer. Adayın cevabını orijinal CV'ye göre değerlendir.", "Task: evaluate_answer. Evaluate the candidate's answer against the original CV."),
+        _block(s, "orijinal_cv", s.cv_text),
+        _block(s, "ilan_ozeti", _json(s.job)),
+        _block(s, "soru", t["asked"]),
+        _block(s, "cevap_ipucu", t["prepared"].get("hint") or "-"),
+        _block(s, "aday_cevabi", t["answer"]),
+    ])
+
+
+def apply_evaluate_answer(s: RunState, r: AgentResult) -> None:
+    from app.checks.numbers import numbers
+
+    verdict = r.data.get("verdict")
+    if verdict not in VERDICTS:
+        raise ProviderError("Mülakatçı geçerli bir değerlendirme ('strong', 'ok' ya da 'weak') vermedi")
+    flags = []
+    for f in r.data.get("flags") or []:
+        if isinstance(f, dict) and str(f.get("claim", "")).strip():
+            flags.append({"claim": str(f["claim"]).strip(), "why": str(f.get("why", "")).strip()})
+        elif isinstance(f, str) and f.strip():
+            flags.append({"claim": f.strip(), "why": ""})
+    # Code backstop 1: numbers the candidate states that the CV does not contain are always shown.
+    cv_numbers = numbers(s.cv_text)
+    answer_numbers = sorted(numbers(s.turn["answer"]) - cv_numbers)
+    code_flags = [_t(s, f"'{n}' rakamı CV'nde yok. Gerçekse CV'ne ekle, değilse söyleme.",
+                     f"The number '{n}' is not in your CV. If it is true add it to the CV, otherwise do not say it.") for n in answer_numbers]
+    framing = str(r.data.get("framing") or "").strip()
+    # Code backstop 2: a suggested framing may not bring in numbers that are not in the CV.
+    if framing and numbers(framing) - cv_numbers:
+        framing = _t(s, *NO_NEW_NUMBERS)
+    if not flags and not code_flags:
+        framing = ""
+    s.turn["evaluation"] = {"verdict": verdict, "feedback": r.message, "flags": flags, "code_flags": code_flags, "framing": framing}
+
+
 SKILLS: dict[str, tuple[Callable[[RunState], str], Callable[[RunState, AgentResult], None]]] = {
     "analyze_job": (prompt_analyze_job, apply_analyze_job),
     "tailor_cv": (prompt_tailor_cv, apply_tailor_cv),
@@ -256,4 +324,6 @@ SKILLS: dict[str, tuple[Callable[[RunState], str], Callable[[RunState, AgentResu
     "write_letter": (prompt_write_letter, apply_write_letter),
     "prepare_interview": (prompt_prepare_interview, apply_prepare_interview),
     "extract_lessons": (prompt_extract_lessons, apply_extract_lessons),
+    "ask_question": (prompt_ask_question, apply_ask_question),
+    "evaluate_answer": (prompt_evaluate_answer, apply_evaluate_answer),
 }

@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from app import replay
+from app import interview, replay
 from app.events import Event, EventBus
 from app.inputs import ACCEPTED, InputError, read_input
 from app.memory import DEFAULT_DIR, LessonStore, MemoryError_
@@ -30,6 +30,8 @@ STATUS = {
     "write_letter": "ön yazıyı yazıyor",
     "prepare_interview": "mülakat sorularını hazırlıyor",
     "extract_lessons": "ders adaylarını çıkarıyor",
+    "ask_question": "soruyu hazırlıyor",
+    "evaluate_answer": "cevabı değerlendiriyor",
 }
 
 EXIT_PAUSED = 75  # EX_TEMPFAIL: not an error, run again later with --devam
@@ -252,8 +254,92 @@ def replay_main(argv: list[str]) -> int:
     return 0
 
 
+class InterviewRenderer(Renderer):
+    """Same renderer as a normal run, plus the mock-interview events."""
+
+    def __call__(self, e: Event) -> None:
+        d = e.data
+        match e.type:
+            case "interview_started":
+                console.rule(f"[bold]Deneme mülakatı[/] · {d['total']} soru · {d['title']}")
+                console.print("[dim]Cevabını yaz ve Enter'a bas. Soruyu geçmek için boş bırak, bitirmek için /bitir yaz.[/]")
+            case "interview_question":
+                console.print(f"[dim]Soru {d['n']}/{d['total']}[/]")
+            case "interview_evaluation":
+                color = {"strong": "green", "ok": "yellow", "weak": "red"}[d["verdict"]]
+                console.print(f"   [{color}]● {interview.LABELS['tr']['v'][d['verdict']]}[/]")
+                for f in d["flags"]:
+                    console.print(f"   [red]✗ CV'de yok:[/] {f['claim']}" + (f" [dim]({f['why']})[/]" if f["why"] else ""))
+                for c in d["code_flags"]:
+                    console.print(f"   [yellow]! {c}[/]")
+                if d["framing"]:
+                    console.print(f"   [green]Dürüst çerçeve:[/] {d['framing']}")
+            case "interview_finished":
+                console.rule("[bold green]Mülakat bitti[/]")
+            case "interview_report":
+                console.print(f"📝 Geri bildirim: {d['path']}")
+            case _:
+                super().__call__(e)
+
+
+def interview_main(argv: list[str]) -> int:
+    from rich.markup import escape
+
+    p = argparse.ArgumentParser(prog="career-crew mulakat", description="Bitmiş bir çalıştırmanın CV'sine göre deneme mülakatı yap.")
+    p.add_argument("klasor", type=Path, metavar="KLASÖR", help="Çalıştırma klasörü (runs/...)")
+    p.add_argument("--mod", default="mock", choices=["mock", "claude-code", "api"], help="Model sağlayıcısı (varsayılan: mock)")
+    p.add_argument("--soru", type=int, default=interview.DEFAULT_COUNT, help=f"Soru sayısı (varsayılan: {interview.DEFAULT_COUNT}, en fazla {interview.MAX_COUNT})")
+    p.add_argument("--betik", action="store_true", help="mock modunda hazır cevapları kullan (demo ve test için)")
+    args = p.parse_args(argv)
+    if args.soru < 1:
+        console.print("[red]--soru en az 1 olmalı[/]")
+        return 2
+    scripted = args.mod == "mock" and (args.betik or not sys.stdin.isatty())
+    if not scripted and not sys.stdin.isatty():
+        console.print("[red]Etkileşimli bir terminal gerekli: cevapları sen yazacaksın.[/]")
+        return 2
+    try:
+        provider = make_provider(args.mod, 0.0)
+    except ProviderError as e:
+        console.print(f"[red]{e}[/]")
+        return 2
+    bus = EventBus()
+    try:
+        session = interview.open_session(args.klasor, provider, bus, args.soru)
+    except (interview.InterviewError, FileNotFoundError) as e:
+        console.print(f"[red]{e}[/]")
+        return 2
+    bus.subscribe(InterviewRenderer(session.orch.registry))
+
+    def get_answer(n: int, question: str) -> str | None:
+        if scripted:
+            from app.providers.mock import MOCK_ANSWERS
+            text = MOCK_ANSWERS[(n - 1) % len(MOCK_ANSWERS)]
+            console.print(f"[bold]Sen:[/] {escape(text)}")
+            return text
+        answer = Prompt.ask("[bold]Sen[/]", default="", show_default=False)
+        return None if answer.strip().lower() == "/bitir" else answer
+
+    try:
+        path = interview.run(session, get_answer)
+    except RunPaused as e:
+        console.print(f"[yellow]Limit doldu, mülakat durdu ({e}). Cevapladıkların kaydedildi.[/]")
+        return EXIT_PAUSED
+    except RunFailed as e:
+        console.print(f"[red]Mülakat durdu: {e}[/]")
+        return 1
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n[yellow]İptal edildi.[/]")
+        return 130
+    if path is None:
+        console.print("Hiç soru cevaplanmadı, geri bildirim yazılmadı.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "mulakat":
+        return interview_main(argv[1:])
     if argv and argv[0] == "replay":
         return replay_main(argv[1:])
     if argv and argv[0] == "web":

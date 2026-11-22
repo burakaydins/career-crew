@@ -1,9 +1,11 @@
 {
   "name": "interviewer",
   "displayName": "🎤 Mülakatçı",
-  "description": "İlana ve CV'ye özel mülakat soruları ve cevap ipuçları hazırlar",
+  "description": "İlana ve CV'ye özel mülakat soruları ve cevap ipuçları hazırlar, deneme mülakatı yapar",
   "skills": [
-    "prepare_interview"
+    "prepare_interview",
+    "ask_question",
+    "evaluate_answer"
   ],
   "model": "haiku",
   "effort": "low",

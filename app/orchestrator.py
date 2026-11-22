@@ -181,11 +181,15 @@ class Orchestrator:
         memory: LessonStore | None = None,
         pdf: bool = False,
         resume: tuple[RunState, list[str]] | None = None,
+        event_log: str | None = "events.jsonl",
+        persist_state: bool = True,
     ) -> None:
         self.provider = provider
         self.registry = registry or Registry()
         self.bus = bus or EventBus()
-        self.bus.subscribe(JsonlSink(run_dir / "events.jsonl"))
+        if event_log:
+            self.bus.subscribe(JsonlSink(run_dir / event_log))
+        self.persist_state = persist_state  # the mock interview borrows run_agent but must not touch state.json
         self.ask = ask
         self.memory = memory
         self.pdf = pdf
@@ -226,6 +230,8 @@ class Orchestrator:
                 self.completed.remove(key)
 
     def save(self, status: str, note: str = "") -> None:
+        if not self.persist_state:
+            return
         with self._lock:
             persist.save(self.state.run_dir, persist.dump(self.state, self.completed, status, self.provider.name, note))
 

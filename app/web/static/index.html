@@ -134,6 +134,29 @@
       </aside>
     </div>
   </section>
+  <section id="interview" class="interview" hidden>
+    <div id="iv-banner" class="banner" role="alert" hidden></div>
+    <div class="iv-head">
+      <h2 id="iv-title">Deneme mülakatı</h2>
+      <span id="iv-progress" class="pill"></span>
+    </div>
+    <div id="iv-chat" class="chat" aria-live="polite"></div>
+    <form id="iv-form" class="iv-form" hidden>
+      <label for="iv-answer" class="hint">Cevabın</label>
+      <textarea id="iv-answer" rows="4" placeholder="Cevabını yaz"></textarea>
+      <p id="iv-error" class="error" role="alert" hidden></p>
+      <div class="actions">
+        <button class="primary" type="submit" id="iv-send">Gönder</button>
+        <button class="secondary" type="button" id="iv-skip">Soruyu geç</button>
+        <button class="secondary" type="button" id="iv-finish">Bitir</button>
+        <button class="secondary" type="button" id="iv-sample" hidden>Örnek cevabı yaz</button>
+      </div>
+    </form>
+    <div id="iv-done" hidden>
+      <button id="iv-report" class="primary" type="button" hidden>Geri bildirimi aç</button>
+      <button id="iv-new" class="secondary" type="button">Başa dön</button>
+    </div>
+  </section>
 </main>
 
 <dialog id="viewer">
@@ -142,5 +165,6 @@
 </dialog>
 
 <script src="/static/app.js"></script>
+<script src="/static/interview.js"></script>
 </body>
 </html>

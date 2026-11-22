@@ -27,9 +27,10 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.events import Event, EventBus
 from app.inputs import MAX_BYTES, InputError, check_upload, read_input
-from app import persist, replay as replay_mod
+from app import interview as interview_mod, persist, replay as replay_mod
 from app.memory import LessonStore, MemoryError_
 from app.orchestrator import Orchestrator, RunFailed, RunPaused, create_run_dir
+from app.providers.mock import MOCK_ANSWERS
 from app.registry import DEFAULT_LANG, LANGUAGES, Registry
 
 HOST = "127.0.0.1"
@@ -88,6 +89,9 @@ class WebRun:
         self.gate_ready = threading.Event()
         self.lessons_answered = False
         self.replay = False
+        self.answer_open = False
+        self.answer: str | None = None
+        self.answer_ready = threading.Event()
 
     def collect(self, event: Event) -> None:
         with self.lock:
@@ -212,6 +216,49 @@ class RunManager:
             with run.lock:
                 run.finished = True
 
+    def start_interview(self, name: str, count: int) -> WebRun:
+        if not RUN_DIR_NAME.match(name) or name in (".", ".."):
+            raise HTTPException(400, "Geçersiz klasör adı")
+        with self.lock:
+            if self.active():
+                raise HTTPException(409, "Zaten çalışan bir süreç var, bitmesini bekleyin")
+            run = WebRun(uuid.uuid4().hex[:12])
+            run.run_dir = self.runs_dir / name
+            bus = EventBus()
+            bus.subscribe(run.collect)
+            try:
+                session = interview_mod.open_session(run.run_dir, self.provider, bus, count)
+            except interview_mod.InterviewError as e:
+                raise HTTPException(400, str(e)) from e
+            except RunFailed as e:
+                raise HTTPException(500, str(e)) from e
+            run.job = session.state.job
+            self.runs[run.id] = run
+        threading.Thread(target=self._work_interview, args=(run, session, bus), daemon=True).start()
+        return run
+
+    def _work_interview(self, run: WebRun, session, bus: EventBus) -> None:
+        def get_answer(n: int, question: str) -> str | None:
+            run.answer, run.answer_open = None, True  # before the event, so a fast click cannot beat it
+            run.answer_ready.clear()
+            bus.publish("input_required", None, kind="answer", n=n)
+            if not run.answer_ready.wait(GATE_TIMEOUT_SECONDS):
+                run.answer_open = False
+                return None
+            return run.answer
+
+        try:
+            interview_mod.run(session, get_answer)
+        except RunPaused as e:
+            bus.publish("run_paused", "interviewer", reason=str(e), run_dir=str(run.run_dir))
+        except RunFailed as e:
+            bus.publish("run_failed", None, error=str(e))
+        except Exception as e:
+            bus.publish("run_failed", None, error=f"beklenmeyen hata ({type(e).__name__}: {e})")
+        finally:
+            with run.lock:
+                run.finished = True
+
     def paused(self) -> list[dict]:
         out = []
         if self.runs_dir.is_dir():
@@ -312,6 +359,7 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
             "languages": list(LANGUAGES),
             "max_mb": MAX_BYTES // 1024 // 1024,
             "memory": memory is not None,
+            "mock_answers": MOCK_ANSWERS if mode == "mock" else [],
             "agents": {n: {"name": c.displayName, "color": c.color, "description": c.description} for n, c in registry.cards.items()},
         }
 
@@ -428,6 +476,41 @@ def create_app(provider, runs_dir: Path = Path("runs"), mode: str = "mock", lang
         if not 0.1 <= speed <= 50:
             raise HTTPException(400, "speed 0.1 ile 50 arasında olmalı")
         return {"id": manager.start_replay(body["dir"], speed, bool(body.get("instant")), upto).id}
+
+    @app.post("/api/interviews")
+    async def start_interview(request: Request):
+        try:
+            body = await request.json()
+        except ValueError:
+            raise HTTPException(400, "Geçersiz istek")
+        count = body.get("count", interview_mod.DEFAULT_COUNT) if isinstance(body, dict) else None
+        if not isinstance(body, dict) or not isinstance(body.get("dir"), str):
+            raise HTTPException(400, "dir gerekli")
+        if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= interview_mod.MAX_COUNT:
+            raise HTTPException(400, f"count 1 ile {interview_mod.MAX_COUNT} arasında bir sayı olmalı")
+        return {"id": manager.start_interview(body["dir"], count).id}
+
+    @app.post("/api/runs/{run_id}/answer")
+    async def answer_question(run_id: str, request: Request):
+        run = get_run(run_id)
+        try:
+            body = await request.json()
+        except ValueError:
+            raise HTTPException(400, "Geçersiz istek")
+        action = body.get("action") if isinstance(body, dict) else None
+        if action not in ("answer", "skip", "finish"):
+            raise HTTPException(400, "action 'answer', 'skip' ya da 'finish' olmalı")
+        text = str(body.get("text") or "").strip()
+        if action == "answer" and not text:
+            raise HTTPException(400, "Cevap boş olamaz")
+        if len(text) > interview_mod.MAX_ANSWER_CHARS:
+            raise HTTPException(400, "Cevap çok uzun")
+        if not run.answer_open:
+            raise HTTPException(409, "Şu anda bekleyen bir soru yok")
+        run.answer = None if action == "finish" else (text if action == "answer" else "")
+        run.answer_open = False
+        run.answer_ready.set()
+        return {"ok": True}
 
     @app.get("/api/paused")
     def paused():

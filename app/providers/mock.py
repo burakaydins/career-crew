@@ -7,6 +7,7 @@ something to catch; round 2 fixes them.
 
 from __future__ import annotations
 
+import re
 import time
 
 from app.providers.base import AgentRequest, AgentResult, ProviderError
@@ -215,6 +216,34 @@ SCRIPT: dict[str, list[dict]] = {
 }
 
 
+# Scripted answers for the mock interview, one per question of INTERVIEW above. They make the demo and the
+# tests reproducible: a strong one, a vague one, one with invented numbers and one that admits a gap.
+MOCK_ANSWERS = [
+    "Önce Django Debug Toolbar ile sorgu sayısını görürdüm, sonra select_related ve prefetch_related ile ilişkili kayıtları tek seferde çekerdim. Sipariş takip uygulamasındaki sorgu optimizasyonu çalışmasında aynı yaklaşımı izledik.",
+    "Belgelendirdim, yani dokümantasyon yazdım.",
+    "Haftalık raporların otomasyonu günde 5 saatlik işi ortadan kaldırdı ve ekibe yılda 1000 saat kazandırdı.",
+    "Docker ile profesyonel deneyimim yok. Bütçe uygulamamı Docker ile paketlemeyi planlıyorum ve resmi dokümanlardan başladım.",
+    "Mikroservis deneyimim yok, Django monolitiyle çalıştım. Servis sınırlarını iş alanlarına göre çizmenin doğru olduğunu biliyorum, bunu küçük bir projede denemek istiyorum.",
+]
+
+EVALUATIONS = [
+    {"message": "Somut ve CV'ye dayalı. Debug Toolbar adımı iyi, bir örnek sorgu sayısı da verebilirsin.",
+     "data": {"verdict": "strong", "flags": [], "framing": ""}},
+    {"message": "Cevap çok kısa. Hangi aracı kullandığını ve belgenin kime yaradığını söylemelisin.",
+     "data": {"verdict": "weak", "flags": [], "framing": ""}},
+    {"message": "Cevaptaki süre rakamları CV'de yok, mülakatta sorulursa kanıtlayamazsın.",
+     "data": {"verdict": "weak",
+              "flags": [{"claim": "günde 5 saatlik işi ortadan kaldırdı ve yılda 1000 saat kazandırdı", "why": "Orijinal CV'de süre ya da kazanç rakamı yok."}],
+              "framing": "CV'deki gerçeği anlat: haftalık raporları Python scriptleriyle otomatikleştirdin. Süreyi ölçmediysen bunu söyle ve tekrar eden işi azalttığını belirt."}},
+    {"message": "Açık ve dürüst. Eksikliği kabul edip somut bir öğrenme adımı verdin.",
+     "data": {"verdict": "strong", "flags": [], "framing": ""}},
+    {"message": "Dürüst, ama cevap genel. Monolit deneyiminden bir somut örnek ekle.",
+     "data": {"verdict": "ok", "flags": [], "framing": ""}},
+]
+
+_PREPARED = re.compile(r"<(?:hazirlanan_soru|prepared_question)>\n(.*?)\n", re.S)
+
+
 class MockProvider:
     name = "mock"
 
@@ -224,8 +253,16 @@ class MockProvider:
     def run(self, request: AgentRequest) -> AgentResult:
         if self.delay:
             time.sleep(self.delay)
-        turns = SCRIPT[request.skill]
-        turn = turns[min(request.iteration, len(turns)) - 1]
+        if request.skill == "ask_question":
+            m = _PREPARED.search(request.user_prompt)
+            if not m:
+                raise ProviderError("mock: hazırlanan soru bulunamadı")
+            return AgentResult(message=m.group(1).strip(), data={"question": m.group(1).strip()}, usage={"mock": True})
+        if request.skill == "evaluate_answer":
+            turn = EVALUATIONS[(max(1, request.iteration) - 1) % len(EVALUATIONS)]
+        else:
+            turns = SCRIPT[request.skill]
+            turn = turns[min(request.iteration, len(turns)) - 1]
         return AgentResult(
             message=turn["message"],
             data=turn.get("data", {}),
