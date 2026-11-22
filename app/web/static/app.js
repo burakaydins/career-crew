@@ -142,7 +142,8 @@ function setStep(id, state, badge) {
 
 // ---- chat ------------------------------------------------------------------
 const chat = $("#chat");
-function scrollChat() { chat.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+let noScroll = false;  // set for ?adim=N so a captured frame always starts at the top
+function scrollChat() { if (noScroll) return; chat.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 
 function agentInfo(name) {
   if (name === "code") return { name: "🧮 Kod kontrolü", color: "var(--muted)" };
@@ -603,6 +604,7 @@ $("#new-run").addEventListener("click", () => { history.replaceState(null, "", l
   if (q.get("replay")) {
     // ?replay=KLASÖR&adim=N plays the first N events at once (used to capture frames for the README).
     const adim = q.get("adim");
+    noScroll = adim !== null;
     $("#replay-speed").value = q.get("hiz") || "1";
     await replayRun(q.get("replay"), null, adim !== null ? { upto: Number(adim) } : {});
     return;
